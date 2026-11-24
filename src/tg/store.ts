@@ -96,6 +96,11 @@ export function messageType(m: TgMessage): string {
   if (m.pinned_message) return 'pinned'
   if (m.migrate_to_chat_id || m.migrate_from_chat_id) return 'migrated'
   if (m.message_auto_delete_timer_changed) return 'auto_delete_changed'
+  if (m.forum_topic_created) return 'topic_created'
+  if (m.forum_topic_edited) return 'topic_edited'
+  if (m.forum_topic_closed) return 'topic_closed'
+  if (m.forum_topic_reopened) return 'topic_reopened'
+  if (m.write_access_allowed) return 'write_access'
   return 'service'
 }
 
@@ -133,6 +138,11 @@ export function messageText(m: TgMessage): string | null {
   if (m.migrate_to_chat_id) return `[group upgraded to supergroup ${m.migrate_to_chat_id}]`
   if (m.migrate_from_chat_id) return `[supergroup created from group ${m.migrate_from_chat_id}]`
   if (m.message_auto_delete_timer_changed) return `[auto-delete] ${m.message_auto_delete_timer_changed.message_auto_delete_time} s`
+  if (m.forum_topic_created) return `[topic] ${m.forum_topic_created.name}`
+  if (m.forum_topic_edited) return `[topic renamed] ${m.forum_topic_edited.name ?? ''}`.trim()
+  if (m.forum_topic_closed) return '[topic closed]'
+  if (m.forum_topic_reopened) return '[topic reopened]'
+  if (m.write_access_allowed) return '[the bot may write here]'
   return null
 }
 

@@ -231,6 +231,16 @@ describe('a bot linked with its token', () => {
     expect(Date.now() - t).toBeGreaterThanOrEqual(1000)
   }, 15_000)
 
+  it('private chat topics: the topic line and the thread of the message are kept', async () => {
+    const acc = mods.accounts.get()
+    push(TOKEN, { message: { message_id: 40, message_thread_id: 40, is_topic_message: true, date: now(), chat: marioChat, from: mario, forum_topic_created: { name: 'Turni', icon_color: 7322096, is_name_implicit: true } } })
+    push(TOKEN, { message: { message_id: 41, message_thread_id: 40, is_topic_message: true, date: now(), chat: marioChat, from: mario, text: 'chi fa la notte?' } })
+    await waitFor(() => ev('message.received', (d) => d.text === 'chi fa la notte?'))
+    const msgs = (await mods.svc.getMessages(acc, '393331234', {})) as unknown as { messages: { id: string; type: string; text: string | null; threadId?: string }[] }
+    expect(msgs.messages.find((m) => m.id === '40')).toMatchObject({ type: 'topic_created', text: '[topic] Turni' })
+    expect(msgs.messages.find((m) => m.id === '41')).toMatchObject({ threadId: '40' })
+  })
+
   it('knows when a person blocks the bot', async () => {
     push(TOKEN, { my_chat_member: { chat: marioChat, from: mario, date: now(), old_chat_member: { user: botUser(7000000001), status: 'member' }, new_chat_member: { user: botUser(7000000001), status: 'kicked', until_date: 0 } } })
     const e = await waitFor(() => ev('chat.member'))

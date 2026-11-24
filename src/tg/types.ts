@@ -99,7 +99,13 @@ export type TgMessage = {
   migrate_from_chat_id?: number
   pinned_message?: { message_id: number; chat?: TgChat; text?: string; caption?: string; date?: number }
   message_auto_delete_timer_changed?: { message_auto_delete_time: number }
-  write_access_allowed?: unknown
+  // topics: in groups with topics, and in private chats with a bot that has topics on (Bot API 9.3+)
+  forum_topic_created?: { name: string; icon_color?: number; icon_custom_emoji_id?: string; is_name_implicit?: boolean }
+  forum_topic_edited?: { name?: string; icon_custom_emoji_id?: string }
+  forum_topic_closed?: Record<string, never>
+  forum_topic_reopened?: Record<string, never>
+  write_access_allowed?: { from_request?: boolean; web_app_name?: string; from_attachment_menu?: boolean }
+  is_topic_message?: boolean
   users_shared?: unknown
   chat_shared?: unknown
 }
