@@ -2,7 +2,7 @@
  * Feedback, crash reports and malfunction reports → GitHub issues of the public repo.
  *
  * - No GitHub login for the user: every installation uses the issues-only key shipped in the code
- *   (src/issues-key.ts) and signs each issue with its own installation code (WO-XXXX-XXXX), created
+ *   (src/issues-key.ts) and signs each issue with its own installation code (TO-XXXX-XXXX), created
  *   on first start and kept in the database.
  * - Feedback is written by the user (Settings → Feedback) or sent by an AI client (MCP tool).
  * - Crashes (the process dies) are written to <data>/crash/ synchronously and picked up on the next
@@ -153,10 +153,10 @@ export class Reports {
 
   async start(): Promise<void> {
     this.code = (await getSetting(this.h, 'install_code')) ?? ''
-    if (!/^WO-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(this.code)) {
+    if (!/^TO-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(this.code)) {
       const ALPH = '23456789ABCDEFGHJKMNPQRSTUVWXYZ'
       const s = [...crypto.randomBytes(8)].map((b) => ALPH[b % ALPH.length]).join('')
-      this.code = `WO-${s.slice(0, 4)}-${s.slice(4)}`
+      this.code = `TO-${s.slice(0, 4)}-${s.slice(4)}`
       await setSetting(this.h, 'install_code', this.code)
       logger.info({ mod: 'reports', installation: this.code }, 'installation code created')
     }

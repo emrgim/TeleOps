@@ -260,7 +260,9 @@ export class BotAccount {
       const api = this.api
       if (!api) return
       try {
-        const updates = await api.call<TgUpdate[]>('getUpdates', { offset: this.offset || undefined, timeout: POLL_TIMEOUT, allowed_updates: ALLOWED_UPDATES }, { signal: this.abort?.signal, timeoutMs: (POLL_TIMEOUT + 20) * 1000 })
+        // the first call answers at once, so the bot shows as connected without waiting a whole long poll
+        const timeout = opened ? POLL_TIMEOUT : 0
+        const updates = await api.call<TgUpdate[]>('getUpdates', { offset: this.offset || undefined, timeout, allowed_updates: ALLOWED_UPDATES }, { signal: this.abort?.signal, timeoutMs: (timeout + 20) * 1000 })
         if (!this.alive(gen)) return
         failures = 0
         if (this.state !== 'open') {
