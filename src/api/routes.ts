@@ -600,8 +600,8 @@ export function registerRoutes(fastify: FastifyInstance, app: App): void {
   f.get('/v1/admin/owner', { preHandler: guard('admin'), schema: { ...tags('Admin'), summary: 'The owner\'s Telegram account, where login codes go' } }, async () => ownerOut())
   f.post(
     '/v1/admin/owner/link',
-    { preHandler: guard('admin'), schema: { ...tags('Admin'), summary: 'A t.me link (15 minutes, once) that links the owner\'s Telegram account when Start is pressed', body: z.object({ bot: z.string().optional() }).default({}) } },
-    async (req) => app.owner.startLink(req.body?.bot),
+    { preHandler: guard('admin'), schema: { ...tags('Admin'), summary: 'A t.me link (15 minutes, once) that links the owner\'s Telegram account when Start is pressed', body: z.object({ bot: z.string().optional(), minutes: z.number().int().min(1).max(1440).optional().describe('How long the link works (default 15)') }).default({}) } },
+    async (req) => app.owner.startLink(req.body?.bot, req.body?.minutes),
   )
   f.delete('/v1/admin/owner', { preHandler: guard('admin'), schema: { ...tags('Admin'), summary: 'Unlink the owner\'s Telegram account (no more login codes)' } }, async () => {
     await app.owner.clear()

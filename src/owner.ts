@@ -40,14 +40,15 @@ export class OwnerLink {
     await this.h.db.deleteFrom('settings').where('k', '=', KEY).execute()
   }
 
-  /** The t.me link that links the owner's Telegram (valid 15 minutes, once). */
-  async startLink(botId?: string): Promise<{ url: string; bot: string; username: string; expiresInMin: number }> {
+  /** The t.me link that links the owner's Telegram (valid 15 minutes unless asked otherwise, once). */
+  async startLink(botId?: string, minutes = LINK_MINUTES): Promise<{ url: string; bot: string; username: string; expiresInMin: number }> {
+    const mins = Math.min(1440, Math.max(1, Math.round(minutes)))
     const acc = botId ? this.accounts.get(botId) : this.accounts.list().find((a) => a.row.is_default && a.state === 'open') ?? this.accounts.list().find((a) => a.state === 'open')
     if (!acc) throw new AppError('NO_CONNECTED_BOT', 'Link a bot first: the code comes from one of your bots', 409)
     if (acc.state !== 'open') throw new AppError('NOT_CONNECTED', 'Bot "{0}" is not connected (state: {1})', 409, [acc.displayName(), acc.state])
     if (!acc.row.username) throw new AppError('NO_USERNAME', 'This bot has no username on Telegram', 409)
-    const token = await this.admin.createLoginToken('owner', LINK_MINUTES * 60_000)
-    return { url: `https://t.me/${acc.row.username}?start=${token}`, bot: acc.id, username: acc.row.username, expiresInMin: LINK_MINUTES }
+    const token = await this.admin.createLoginToken('owner', mins * 60_000)
+    return { url: `https://t.me/${acc.row.username}?start=${token}`, bot: acc.id, username: acc.row.username, expiresInMin: mins }
   }
 
   /** `/start <param>` reached a bot: an owner token links this person; anything else is left to the bot's chat. */

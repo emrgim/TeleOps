@@ -254,7 +254,9 @@ describe('a bot that sends its updates to another program (webhook)', () => {
 
 describe('the owner links their Telegram: login codes go there', () => {
   it('/start with the one-time token links the person who pressed Start', async () => {
+    expect((await mods.owner.startLink(undefined, 60)).expiresInMin).toBe(60)
     const link = await mods.owner.startLink()
+    expect(link.expiresInMin).toBe(15)
     expect(link.url).toMatch(/^https:\/\/t\.me\/test7000000001_bot\?start=own[A-Za-z0-9_-]{20,40}$/)
     const param = new URL(link.url).searchParams.get('start')!
     const received = mods.events.filter((e) => e.type === 'message.received').length
