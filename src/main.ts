@@ -106,6 +106,7 @@ async function main() {
   const webhooks = new WebhookDispatcher(h, bus)
   webhooks.setNames({
     botName: (id) => accounts.accounts.get(id)?.displayName() ?? null,
+    botKind: (id) => accounts.accounts.get(id)?.kind ?? null,
     chatUsername: async (bot, chat) => (await accounts.accounts.get(bot)?.store.usernameOf(chat)) ?? null,
   })
   await webhooks.start()

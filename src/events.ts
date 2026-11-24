@@ -96,7 +96,7 @@ export function maskHookHeaders(stored: string | null | undefined): Record<strin
 }
 
 /** One line in plain words: agents (Cursor / Grok Bot automations read `context`) see at once what happened. */
-export function describeEvent(ev: Pick<BusEvent, 'type' | 'account' | 'data'>, botName?: string | null): string {
+export function describeEvent(ev: Pick<BusEvent, 'type' | 'account' | 'data'>, botName?: string | null, kind?: string | null): string {
   type D = {
     chat?: string
     chatName?: string | null
@@ -125,7 +125,9 @@ export function describeEvent(ev: Pick<BusEvent, 'type' | 'account' | 'data'>, b
     name?: string | null
   }
   const d = (ev.data ?? {}) as D
-  const on = botName ? `${botName} (bot ${ev.account})` : `bot ${ev.account}`
+  // a Telegram account is a person, not a bot
+  const noun = kind === 'user' ? 'Telegram account' : 'bot'
+  const on = botName ? `${botName} (${noun} ${ev.account})` : `${noun} ${ev.account}`
   const who = [d.senderName, d.senderUsername ? '@' + d.senderUsername : null].filter(Boolean).join(' ') || 'unknown'
   const where = d.chatType && d.chatType !== 'private' ? ` in the ${d.chatType === 'channel' ? 'channel' : 'group'} "${d.chatName ?? d.chat}"` : ''
   const cut = (t: string, n: number) => (t.length > n ? `${t.slice(0, n)}…` : t)
@@ -211,7 +213,7 @@ export class WebhookDispatcher {
     private h: DbHandle,
     private bus: EventBus,
     private allowChats: Set<string> | null = parseWebhookAllowChats(process.env.WEBHOOK_ALLOW_CHATS),
-    private names: { botName(id: string): string | null; chatUsername(bot: string, chat: string): Promise<string | null> } = { botName: () => null, chatUsername: async () => null },
+    private names: { botName(id: string): string | null; botKind?(id: string): string | null; chatUsername(bot: string, chat: string): Promise<string | null> } = { botName: () => null, chatUsername: async () => null },
   ) {}
 
   async start(): Promise<void> {
@@ -238,7 +240,7 @@ export class WebhookDispatcher {
   }
 
   /** Bot names for the `context` line, chat usernames for the allowlist (set at start). */
-  setNames(names: { botName(id: string): string | null; chatUsername(bot: string, chat: string): Promise<string | null> }) {
+  setNames(names: { botName(id: string): string | null; botKind?(id: string): string | null; chatUsername(bot: string, chat: string): Promise<string | null> }) {
     this.names = names
   }
 
@@ -256,7 +258,7 @@ export class WebhookDispatcher {
   }
 
   private async deliver(hk: Hook, ev: BusEvent, attempt: number, deliveryId: string, retry = true): Promise<{ ok: boolean; status: number; error: string | null }> {
-    const body = JSON.stringify({ id: ev.id, type: ev.type, bot: ev.account, at: new Date(ev.at).toISOString(), context: describeEvent(ev, this.names.botName(ev.account)), data: ev.data })
+    const body = JSON.stringify({ id: ev.id, type: ev.type, bot: ev.account, at: new Date(ev.at).toISOString(), context: describeEvent(ev, this.names.botName(ev.account), this.names.botKind?.(ev.account)), data: ev.data })
     const ts = String(Math.floor(Date.now() / 1000))
     let status = 0
     let error: string | null = null

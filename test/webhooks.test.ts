@@ -41,6 +41,8 @@ describe('webhook headers, written the way receivers show them', () => {
     )
     expect(describeEvent({ type: 'button.pressed', account: BOT, data: { ...mario, data: 'yes', label: 'Sì' } })).toBe('Button "Sì" pressed by Mario Rossi @mario on a message of bot 7000000001 (data: yes)')
     expect(describeEvent({ type: 'chat.member', account: BOT, data: { chat: '393331234', chatType: 'private', bot: true, status: 'kicked', byName: 'Mario Rossi' } })).toBe('Mario Rossi blocked bot 7000000001')
+    // a Telegram account is a person, not a bot
+    expect(describeEvent({ type: 'message.received', account: '8163356356', data: mario }, 'Emi', 'user')).toBe('Telegram message received by Emi (Telegram account 8163356356) from Mario Rossi @mario: ciao')
   })
 })
 
