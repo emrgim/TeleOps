@@ -28,6 +28,8 @@ import { License } from './license.js'
 import { VoiceService } from './voice.js'
 import { BackupService } from './backup.js'
 import { OwnerLink } from './owner.js'
+import { telegramApp } from './tg/user/app.js'
+import { UserLogins } from './tg/user/login.js'
 
 // Slow or IPv4-only links: Node gives each address 250 ms to connect before giving up on it, so a
 // server that answers in a few seconds over IPv6 trouble is never reached ("fetch failed").
@@ -91,8 +93,10 @@ async function main() {
   await primeTheme().catch(() => {})
   const bus = new EventBus()
   const admin = new AdminAuth(h)
-  const ctx: ConstructorParameters<typeof AccountManager>[0] = { h, bus, settings }
+  const ctx: ConstructorParameters<typeof AccountManager>[0] = { h, bus, settings, telegramApp: () => telegramApp(h) }
   const accounts = new AccountManager(ctx)
+  // Telegram user accounts: QR code or phone + code (+ password), then the account connects like a bot
+  const logins = new UserLogins({ app: () => telegramApp(h), finish: async (session, user) => (await accounts.addUser(session, user)).account })
   const owner = new OwnerLink(h, admin, accounts)
   // `/start <token>` from the config page links the owner's Telegram (login codes go there)
   ctx.onStart = (acc, m, param) => owner.onStart(acc, m, param)
@@ -159,6 +163,7 @@ async function main() {
     t.unref()
     try {
       voice.stop()
+      await logins.stopAll()
       await accounts.stopAll()
       await fastify.close()
       await h.close()
@@ -193,6 +198,7 @@ async function main() {
     voice,
     backup,
     owner,
+    logins,
     // systemd (Restart=always) brings us back with the new configuration
     restart: (reason) => setTimeout(() => void shutdown(0, `restart: ${reason}`), 400).unref(),
   }

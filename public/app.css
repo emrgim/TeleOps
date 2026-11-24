@@ -246,3 +246,11 @@ a.linkbtn:hover{background:transparent;color:var(--accent)}
 .picker-list .muted{padding:5px 6px;font-size:12px}
 td.nowrap{white-space:nowrap}
 #bakForm input[name=keep]{max-width:160px}
+
+/* + : bot or Telegram account; linking an account (QR code or phone number) */
+.choices{display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.choice{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;padding:10px 12px;width:100%;white-space:normal}
+.choice span{font-weight:400;text-transform:none;letter-spacing:0}
+#userDlg img.qr{display:block;width:240px;height:240px;margin:10px auto;background:#fff;padding:8px;image-rendering:pixelated}
+#userDlg .user-err{color:var(--danger);min-height:1.2em;margin:6px 0 0}
+#userDlg [data-pane][hidden],#profForm .bot-only[hidden]{display:none}

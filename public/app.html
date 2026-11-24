@@ -15,7 +15,7 @@
 <meta name="apple-mobile-web-app-title" content="TeleOps">
 <link id="omTheme" rel="stylesheet" href="/theme.css?v=1">
 <link rel="stylesheet" href="/static/base.css?v=1">
-<link rel="stylesheet" href="/static/app.css?v=1">
+<link rel="stylesheet" href="/static/app.css?v=2">
 <script src="/static/theme.js?v=1" defer></script>
 <script src="/static/i18n.js?v=1"></script>
 </head>
@@ -279,16 +279,68 @@
     <div class="prof-head"><span class="avatar big" id="profAvatar"></span><div><div class="phone" id="profPhone"></div><p class="muted small" data-i18n="prof.hint"></p></div></div>
     <label><span data-i18n="prof.name"></span> <input name="name" maxlength="64" required></label>
     <label><span data-i18n="prof.about"></span> <textarea name="about" rows="2" maxlength="120"></textarea></label>
-    <label><span data-i18n="prof.description"></span> <textarea name="description" rows="3" maxlength="512"></textarea></label>
-    <label><span data-i18n="prof.commands"></span> <textarea name="commands" rows="4" spellcheck="false" data-i18n-ph="prof.commandsPh"></textarea></label>
-    <label class="inline"><input type="checkbox" name="readAll"> <span data-i18n="prof.readAll"></span></label>
+    <label class="bot-only"><span data-i18n="prof.description"></span> <textarea name="description" rows="3" maxlength="512"></textarea></label>
+    <label class="bot-only"><span data-i18n="prof.commands"></span> <textarea name="commands" rows="4" spellcheck="false" data-i18n-ph="prof.commandsPh"></textarea></label>
+    <label class="inline bot-only"><input type="checkbox" name="readAll"> <span data-i18n="prof.readAll"></span></label>
     <label><span data-i18n="prof.photo"></span> <input name="photo" type="file" accept="image/jpeg,image/png,image/webp"></label>
     <div class="row"><button type="button" class="ghost small danger" id="profRemovePhoto" data-i18n="prof.removePhoto"></button></div>
     <div class="row"><button value="cancel" class="ghost" formnovalidate data-i18n="cancel"></button><button value="ok" data-i18n="save"></button></div>
   </form>
 </dialog>
 
+<dialog id="kindDlg">
+  <form method="dialog" class="dlg">
+    <h3 data-i18n="kind.title"></h3>
+    <div class="choices">
+      <button type="button" class="choice ghost" data-kind="bot"><b data-i18n="kind.bot"></b><span class="muted small" data-i18n="kind.botHint"></span></button>
+      <button type="button" class="choice ghost" data-kind="user"><b data-i18n="kind.user"></b><span class="muted small" data-i18n="kind.userHint"></span></button>
+    </div>
+    <div class="row"><button value="cancel" class="ghost" formnovalidate data-i18n="cancel"></button></div>
+  </form>
+</dialog>
+
+<dialog id="userDlg">
+  <form method="dialog" class="dlg" id="userForm" autocomplete="off">
+    <h3 data-i18n="user.title"></h3>
+    <div data-pane="app">
+      <p class="muted small" data-i18n-html="user.appHint"></p>
+      <label><span>api_id</span> <input name="apiId" inputmode="numeric" spellcheck="false"></label>
+      <label><span>api_hash</span> <input name="apiHash" spellcheck="false"></label>
+      <div class="row"><button type="button" id="userAppGo" data-i18n="user.continue"></button></div>
+    </div>
+    <div data-pane="method">
+      <p class="muted small" data-i18n="user.methodHint"></p>
+      <div class="choices">
+        <button type="button" class="choice ghost" id="userQrGo"><b data-i18n="user.qr"></b><span class="muted small" data-i18n="user.qrHint"></span></button>
+        <button type="button" class="choice ghost" id="userPhoneOpen"><b data-i18n="user.phone"></b><span class="muted small" data-i18n="user.phoneHint"></span></button>
+      </div>
+    </div>
+    <div data-pane="qr">
+      <p class="muted small" data-i18n-html="user.qrScan"></p>
+      <img id="userQrImg" class="qr" alt="QR">
+    </div>
+    <div data-pane="phone">
+      <label><span data-i18n="user.phoneLabel"></span> <input name="phone" type="tel" placeholder="+971 50 123 4567"></label>
+      <div class="row"><button type="button" id="userPhoneGo" data-i18n="user.sendCode"></button></div>
+    </div>
+    <div data-pane="code">
+      <p class="muted small" id="userCodeVia"></p>
+      <label><span data-i18n="user.codeLabel"></span> <input name="code" inputmode="numeric" autocomplete="one-time-code"></label>
+      <div class="row"><button type="button" id="userCodeGo" data-i18n="user.login"></button></div>
+    </div>
+    <div data-pane="password">
+      <p class="muted small" data-i18n="user.pwHint"></p>
+      <p class="muted small" id="userPwHint"></p>
+      <label><span data-i18n="user.pwLabel"></span> <input name="password" type="password" autocomplete="current-password"></label>
+      <div class="row"><button type="button" id="userPwGo" data-i18n="user.login"></button></div>
+    </div>
+    <div data-pane="done"><p id="userDone"></p></div>
+    <p class="small user-err" id="userErr"></p>
+    <div class="row"><button value="cancel" class="ghost" formnovalidate data-i18n="user.close"></button></div>
+  </form>
+</dialog>
+
 <div id="toast"></div>
-<script src="/static/app.js?v=1"></script>
+<script src="/static/app.js?v=2"></script>
 </body>
 </html>

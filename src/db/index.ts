@@ -101,13 +101,14 @@ type TableDef = {
 export const TABLES: TableDef[] = [
   { name: 'meta', cols: [['k', 'key', 'notnull'], ['v', 'long']], pk: ['k'] },
   { name: 'settings', cols: [['k', 'key', 'notnull'], ['v', 'long']], pk: ['k'] },
-  // the Telegram bots: id = the bot's Telegram id, token from @BotFather, me = getMe as JSON
+  // the Telegram accounts: bots (id = the bot's Telegram id, token from @BotFather, me = getMe as JSON) and
+  // user accounts (kind 'user': id = the person's Telegram id, session = the sealed MTProto session)
   {
     name: 'accounts',
     cols: [
       ['id', 'id', 'notnull'], ['label', 'name'], ['username', 'name'], ['token', 'name'],
       ['enabled', 'int'], ['is_default', 'int'], ['me', 'long'], ['status', 'short'], ['update_offset', 'big'],
-      ['created_at', 'big'], ['updated_at', 'big'],
+      ['created_at', 'big'], ['updated_at', 'big'], ['kind', 'short'], ['session', 'long'],
     ],
     pk: ['id'],
   },

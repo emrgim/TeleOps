@@ -4,7 +4,7 @@ import type { EventBus } from '../events.js'
 import { logger } from '../log.js'
 import type { Settings } from '../settings.js'
 import { AppError, sleep } from '../util.js'
-import { BotApi, TgApiError, type Upload } from './api.js'
+import { BotApi, TgApiError, type TgCaller, type Upload } from './api.js'
 import { TgStore, chatTitle, fullName, isGroupType, type Media, type MessageRow } from './store.js'
 import {
   ALLOWED_UPDATES,
@@ -30,7 +30,13 @@ export type AccountRow = {
   update_offset: number | null
   created_at: number
   updated_at: number
+  /** 'bot' (token from @BotFather) or 'user' (a Telegram account, logged in with its phone or a QR code) */
+  kind?: string | null
+  /** user accounts: the MTProto session, sealed (src/tg/user/crypt.ts) */
+  session?: string | null
 }
+
+export type AccountKind = 'bot' | 'user'
 
 export type AccountState = 'stopped' | 'not_linked' | 'connecting' | 'open' | 'reconnecting' | 'conflict' | 'unauthorized' | 'error'
 
@@ -40,6 +46,8 @@ export type Ctx = {
   settings: Settings
   /** `/start <param>` in a private chat: true = handled by TeleOps itself (not stored, no event). */
   onStart?: (acc: BotAccount, m: TgMessage, param: string) => Promise<boolean>
+  /** Telegram app (api_id / api_hash) for user accounts */
+  telegramApp?: () => Promise<{ apiId: number; apiHash: string } | null>
 }
 
 /** The bot's profile on Telegram (the name is in `accounts`). */
@@ -123,15 +131,15 @@ export class BotAccount {
   readonly limiter: SendLimiter
   me: TgBotInfo | null = null
   private api_?: BotApi
-  private stopping = false
-  private generation = 0
+  protected stopping = false
+  protected generation = 0
   private abort?: AbortController
   private offset = 0
-  private profileCache: ProfileRow | null = null
+  protected profileCache: ProfileRow | null = null
 
   constructor(
     public row: AccountRow,
-    private ctx: Ctx,
+    protected ctx: Ctx,
   ) {
     this.store = new TgStore(ctx.h, row.id, () => this.row.id)
     this.limiter = new SendLimiter(ctx.settings)
@@ -148,7 +156,12 @@ export class BotAccount {
     return this.row.id
   }
 
-  get api(): BotApi | undefined {
+  /** 'bot' here; UserAccount answers 'user'. */
+  get kind(): AccountKind {
+    return 'bot'
+  }
+
+  get api(): TgCaller | undefined {
     if (!this.row.token) return undefined
     if (!this.api_) this.api_ = new BotApi(this.row.token)
     return this.api_
@@ -171,6 +184,7 @@ export class BotAccount {
   status() {
     return {
       id: this.row.id,
+      kind: this.kind,
       name: this.displayName(),
       username: this.row.username,
       link: this.link(),
@@ -188,7 +202,7 @@ export class BotAccount {
     }
   }
 
-  private setState(s: AccountState, extra: Record<string, unknown> = {}) {
+  protected setState(s: AccountState, extra: Record<string, unknown> = {}) {
     if (this.state === s && !Object.keys(extra).length) return
     this.state = s
     this.since = now()
@@ -196,7 +210,7 @@ export class BotAccount {
     this.ctx.bus.publish('connection.update', this.row.id, { state: s, ...extra })
   }
 
-  private alive(gen: number): boolean {
+  protected alive(gen: number): boolean {
     return gen === this.generation && !this.stopping
   }
 
@@ -233,7 +247,7 @@ export class BotAccount {
   }
 
   /** A failure that stopping and retrying will not fix: invalid token, another reader. */
-  private fatal(e: unknown): boolean {
+  protected fatal(e: unknown): boolean {
     if (!(e instanceof TgApiError)) return false
     if (e.code === 401 || e.code === 404) {
       this.lastError = { code: e.code, reason: 'The token is not valid any more (revoked or replaced in @BotFather): link the bot again with its new token', at: now() }
@@ -316,7 +330,7 @@ export class BotAccount {
   }
 
   /** Connected: read the profile now and then every 10 minutes (the photo every hour). */
-  private onOpen(gen: number) {
+  protected onOpen(gen: number) {
     let n = 0
     const refresh = () => {
       if (!this.alive(gen)) return
@@ -335,7 +349,7 @@ export class BotAccount {
   }
 
   // ---------------------------------------------------------------- updates
-  private async handle(u: TgUpdate): Promise<void> {
+  protected async handle(u: TgUpdate): Promise<void> {
     if (u.message) return this.onMessage(u.message)
     if (u.channel_post) return this.onMessage(u.channel_post)
     if (u.edited_message) return this.onEdited(u.edited_message)
@@ -346,12 +360,12 @@ export class BotAccount {
     if (u.message_reaction) return this.onReaction(u.message_reaction)
   }
 
-  private isMine(m: TgMessage): boolean {
+  protected isMine(m: TgMessage): boolean {
     return !m.sender_chat && String(m.from?.id ?? '') === this.id
   }
 
-  private async onMessage(m: TgMessage): Promise<void> {
-    if (m.chat.type === 'private' && typeof m.text === 'string' && /^\/start(@\S+)?\s+\S/.test(m.text) && this.ctx.onStart) {
+  protected async onMessage(m: TgMessage): Promise<void> {
+    if (this.kind === 'bot' && m.chat.type === 'private' && typeof m.text === 'string' && /^\/start(@\S+)?\s+\S/.test(m.text) && this.ctx.onStart) {
       const param = m.text.replace(/^\/start(@\S+)?\s+/, '').trim()
       if (await this.ctx.onStart(this, m, param).catch(() => false)) return
     }
@@ -360,7 +374,7 @@ export class BotAccount {
     for (const r of rows) this.ctx.bus.publish(r.from_me ? 'message.sent' : 'message.received', this.id, await this.summarize(r))
   }
 
-  private async onEdited(m: TgMessage): Promise<void> {
+  protected async onEdited(m: TgMessage): Promise<void> {
     const rows = await this.store.upsertMessages([{ m, fromMe: this.isMine(m) }])
     for (const r of rows) this.ctx.bus.publish('message.edited', this.id, await this.summarize(r))
   }
@@ -449,7 +463,7 @@ export class BotAccount {
   }
 
   // ---------------------------------------------------------------- calls
-  requireApi(): BotApi {
+  requireApi(): TgCaller {
     const api = this.api
     if (!api || !this.row.enabled || ['not_linked', 'unauthorized', 'stopped'].includes(this.state)) {
       throw new AppError('NOT_CONNECTED', 'Bot "{0}" is not connected (state: {1})', 409, [this.displayName(), this.state])
@@ -548,7 +562,7 @@ export class BotAccount {
     return this.profileCache
   }
 
-  private async saveProfile(p: Partial<Omit<ProfileRow, 'account_id' | 'updated_at'>>): Promise<void> {
+  protected async saveProfile(p: Partial<Omit<ProfileRow, 'account_id' | 'updated_at'>>): Promise<void> {
     const cur = this.profileCache ?? (await this.loadProfile()) ?? { account_id: this.id, about: null, description: null, commands: null, photo: null, photo_type: null, photo_id: null, updated_at: null }
     const next: ProfileRow = { ...cur, ...p, account_id: this.id, updated_at: now() }
     const changed = next.about !== cur.about || next.description !== cur.description || next.photo_id !== cur.photo_id || next.commands !== cur.commands

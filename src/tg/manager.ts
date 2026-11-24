@@ -3,12 +3,20 @@ import { logger } from '../log.js'
 import { AppError } from '../util.js'
 import { BotApi, botIdOf, TgApiError } from './api.js'
 import { BotAccount, tgReason, type AccountRow, type Ctx } from './account.js'
+import { fullName } from './store.js'
 import type { TgBotInfo, TgWebhookInfo } from './types.js'
+import { meOf } from './user/convert.js'
+import { sealSession } from './user/crypt.js'
+import { UserAccount } from './user/account.js'
+import type { Api } from 'telegram'
 
 /** Everything stored for one bot (removed with it). */
 const DATA_TABLES = ['messages', 'chats', 'contacts', 'outbox', 'profiles', 'transcripts']
 
-/** The bots of this installation. A bot's id is its Telegram id (the number before ":" in its token). */
+/**
+ * The Telegram accounts of this installation: bots (id = the number before ":" in the token) and user
+ * accounts (id = the person's Telegram id), both answering the same calls (see TgCaller).
+ */
 export class AccountManager {
   readonly accounts = new Map<string, BotAccount>()
 
@@ -20,7 +28,7 @@ export class AccountManager {
 
   async loadAll(): Promise<void> {
     const rows = (await this.h.db.selectFrom('accounts').selectAll().orderBy('created_at').execute()) as AccountRow[]
-    for (const r of rows) this.accounts.set(r.id, new BotAccount(r, this.ctx))
+    for (const r of rows) this.accounts.set(r.id, this.make(r))
     for (const acc of this.accounts.values()) {
       if (!acc.row.enabled) {
         acc.state = 'stopped'
@@ -30,8 +38,61 @@ export class AccountManager {
     }
   }
 
+  private make(r: AccountRow): BotAccount {
+    return r.kind === 'user' ? new UserAccount(r, this.ctx) : new BotAccount(r, this.ctx)
+  }
+
   list(): BotAccount[] {
     return [...this.accounts.values()]
+  }
+
+  /** The bot that writes to the owner (login codes): the default one if it is a bot, else the first connected bot. */
+  defaultBot(): BotAccount | undefined {
+    const bots = this.list().filter((a) => a.kind === 'bot')
+    return bots.find((a) => a.row.is_default && a.state === 'open') ?? bots.find((a) => a.state === 'open') ?? bots.find((a) => a.row.is_default) ?? bots[0]
+  }
+
+  /**
+   * A Telegram account logged in (QR or phone): store its session sealed and connect it. The same account
+   * again replaces the session (a new login after the old one was closed).
+   */
+  async addUser(session: string, user: Api.User): Promise<{ account: BotAccount; created: boolean }> {
+    const me = meOf(user)
+    const id = String(me.id)
+    const sealed = sealSession(session)
+    const existing = this.accounts.get(id)
+    if (existing && existing.kind !== 'user') throw new AppError('ACCOUNT_EXISTS', 'This Telegram id is already linked as a bot', 409)
+    if (existing) {
+      existing.row.session = sealed
+      existing.row.enabled = 1
+      existing.me = me
+      await this.h.db.updateTable('accounts').set({ session: sealed, enabled: 1, me: JSON.stringify(me), updated_at: now() }).where('id', '=', id).execute()
+      await existing.start()
+      logger.info({ account: id }, 'Telegram account session replaced')
+      return { account: existing, created: false }
+    }
+    const row: AccountRow = {
+      id,
+      kind: 'user',
+      label: fullName(me) ?? me.username ?? null,
+      username: me.username ?? null,
+      token: null,
+      session: sealed,
+      enabled: 1,
+      is_default: this.accounts.size === 0 ? 1 : 0,
+      me: JSON.stringify(me),
+      status: 'connecting',
+      update_offset: 0,
+      created_at: now(),
+      updated_at: now(),
+    }
+    await this.h.db.insertInto('accounts').values(row).execute()
+    const acc = this.make(row)
+    this.accounts.set(id, acc)
+    this.ctx.bus.publish('connection.update', id, { state: 'connecting', created: true, username: me.username ?? null, kind: 'user' })
+    logger.info({ account: id }, 'Telegram account linked')
+    await acc.start()
+    return { account: acc, created: true }
   }
 
   /** A bot by id, @username or name; the default bot when omitted. */
@@ -132,6 +193,8 @@ export class AccountManager {
   /** Unlink a bot (the bot itself stays on Telegram); its stored chats go too unless purge is false. */
   async remove(id: string, purge = true): Promise<void> {
     const acc = this.get(id)
+    // a person's session is closed on Telegram too (it leaves Settings → Devices)
+    if (acc instanceof UserAccount) await acc.logout()
     await acc.stop(false)
     if (purge) for (const t of DATA_TABLES) await this.h.db.deleteFrom(t).where('account_id', '=', acc.id).execute()
     await this.h.db.deleteFrom('accounts').where('id', '=', acc.id).execute()

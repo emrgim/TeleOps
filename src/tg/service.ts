@@ -5,6 +5,7 @@ import type { Settings } from '../settings.js'
 import { AppError } from '../util.js'
 import type { BotAccount } from './account.js'
 import type { AccountManager } from './manager.js'
+import type { UserAccount } from './user/account.js'
 import { fullName, type Media, type MessageRow } from './store.js'
 import type { TgChatFullInfo, TgChatMember, TgFile, TgInviteLink, TgMessage } from './types.js'
 import type { Upload } from './api.js'
@@ -25,10 +26,17 @@ const SEND: Record<Exclude<MediaType, 'image'>, { method: string; field: string;
   video_note: { method: 'sendVideoNote', field: 'video_note', caption: false, maxMb: 50 },
 }
 
-/** Bots download at most 20 MB from Telegram's servers. */
+/** Bots download at most 20 MB from Telegram's servers (a Telegram user account has no such limit). */
 const TG_DOWNLOAD_MAX = 20 * 1024 * 1024
 const TEXT_MAX = 4096
 const CAPTION_MAX = 1024
+
+/** A Telegram user account (it reads history and searches on Telegram; it cannot send buttons). */
+const asUser = (acc: BotAccount): UserAccount | null => (acc.kind === 'user' ? (acc as unknown as UserAccount) : null)
+
+function noButtonsForPeople(acc: BotAccount, buttons: unknown[] | undefined) {
+  if (acc.kind === 'user' && buttons?.length) throw new AppError('BOTS_ONLY_BUTTONS', 'Buttons under a message are for bots only: a Telegram account cannot send them', 400)
+}
 
 function likeOp(h: DbHandle): 'ilike' | 'like' {
   return h.dialect === 'postgres' ? 'ilike' : 'like'
@@ -196,6 +204,12 @@ export class TgService {
     const chat = await this.resolveChat(acc, chatInput)
     let q = this.h.db.selectFrom('messages').selectAll().where('account_id', '=', acc.id).where('chat_id', '=', chat)
     const toTs = (v: string | number) => (typeof v === 'number' ? (v > 1e12 ? Math.floor(v / 1000) : v) : Math.floor(Date.parse(v) / 1000))
+    // a person can read the history on Telegram: fetch that window first (what is stored answers if Telegram cannot)
+    const user = asUser(acc)
+    if (user) {
+      const window = { limit: Math.min(o.limit ?? 30, 200), before: o.before !== undefined && o.before !== '' ? toTs(o.before) : undefined, after: o.after !== undefined && o.after !== '' ? toTs(o.after) : undefined }
+      await user.history(chat, window).catch(() => 0)
+    }
     if (o.before !== undefined && o.before !== '') q = q.where('ts', '<', toTs(o.before))
     if (o.after !== undefined && o.after !== '') q = q.where('ts', '>', toTs(o.after))
     const rows = (await q.orderBy('ts', 'desc').orderBy('seq', 'desc').limit(Math.min(o.limit ?? 30, 500)).execute()) as MessageRow[]
@@ -210,6 +224,8 @@ export class TgService {
     const pattern = `%${escLike(query)}%`
     const chat = o.chat ? await this.resolveChat(acc, o.chat) : null
     const since = o.since ? Math.floor(Date.parse(o.since) / 1000) : null
+    // a person's account searches on Telegram too (every chat, all the history); the results join the stored ones
+    await asUser(acc)?.searchRemote(query, chat, limit).catch(() => 0)
     let q = this.h.db.selectFrom('messages').selectAll().where('account_id', '=', acc.id).where('text', likeOp(this.h), pattern)
     if (chat) q = q.where('chat_id', '=', chat)
     if (since) q = q.where('ts', '>=', since)
@@ -317,6 +333,7 @@ export class TgService {
   async sendText(acc: BotAccount, i: { to: string; text: string; parseMode?: ParseMode; replyTo?: string; buttons?: (Button | Button[])[]; silent?: boolean; linkPreview?: boolean; threadId?: string; idempotencyKey?: string }) {
     if (!i.text?.trim()) throw new AppError('EMPTY_TEXT', 'text is required', 400)
     if (i.parseMode && i.text.length > TEXT_MAX) throw new AppError('TEXT_TOO_LONG', 'A formatted message is at most {0} characters (plain text is split by itself)', 400, [TEXT_MAX])
+    noButtonsForPeople(acc, i.buttons)
     const chat = await this.prepareRecipient(acc, i.to)
     const parts = i.parseMode ? [i.text] : splitText(i.text)
     const markup = keyboard(i.buttons)
@@ -388,6 +405,7 @@ export class TgService {
     if (!kind) throw new AppError('INVALID_INPUT', 'Unknown media type {0}', 400, [i.type])
     if (i.caption && !kind.caption) throw new AppError('INVALID_INPUT', 'A {0} has no caption', 400, [i.type])
     if (i.caption && i.caption.length > CAPTION_MAX) throw new AppError('CAPTION_TOO_LONG', 'A caption is at most {0} characters', 400, [CAPTION_MAX])
+    noButtonsForPeople(acc, i.buttons)
     const chat = await this.prepareRecipient(acc, i.to)
     const params: Record<string, unknown> = {
       caption: i.caption || undefined,
@@ -402,7 +420,7 @@ export class TgService {
     if (i.fileId) params[kind.field] = i.fileId
     else {
       const f = await this.loadMedia(i)
-      if (f.buf.length > kind.maxMb * 1024 * 1024) throw new AppError('MEDIA_TOO_LARGE', 'Telegram takes a {0} of at most {1} MB from a bot', 413, [i.type, kind.maxMb])
+      if (acc.kind === 'bot' && f.buf.length > kind.maxMb * 1024 * 1024) throw new AppError('MEDIA_TOO_LARGE', 'Telegram takes a {0} of at most {1} MB from a bot', 413, [i.type, kind.maxMb])
       const ext = (f.mimetype?.split('/')[1] ?? 'bin').replace(/[^a-z0-9]/gi, '').slice(0, 8) || 'bin'
       files = [{ field: kind.field, data: f.buf, fileName: f.fileName ?? `${kind.field}.${ext}`, mimetype: f.mimetype }]
       bytes = f.buf.length
@@ -436,8 +454,12 @@ export class TgService {
   }
 
   async editMessage(acc: BotAccount, i: { chat: string; messageId: string; text: string; parseMode?: ParseMode; buttons?: (Button | Button[])[] }) {
+    noButtonsForPeople(acc, i.buttons)
     const { chat, row } = await this.messageOf(acc, i.chat, i.messageId)
-    if (row && !row.from_me) throw new AppError('NOT_OWN_MESSAGE', 'A bot can edit only the messages it sent', 403)
+    if (row && !row.from_me) {
+      if (acc.kind === 'user') throw new AppError('NOT_OWN_MESSAGE', 'This account can edit only its own messages', 403)
+      throw new AppError('NOT_OWN_MESSAGE', 'A bot can edit only the messages it sent', 403)
+    }
     const caption = !!row?.media
     if (!i.text?.trim()) throw new AppError('EMPTY_TEXT', 'text is required', 400)
     if (i.text.length > (caption ? CAPTION_MAX : TEXT_MAX)) throw new AppError('TEXT_TOO_LONG', 'At most {0} characters', 400, [caption ? CAPTION_MAX : TEXT_MAX])
@@ -524,8 +546,12 @@ export class TgService {
       media = null
     }
     if (!media?.fileId) throw new AppError('NO_MEDIA', 'This message has no media', 400)
-    const max = Math.min(this.settings.get().maxMediaMb * 1024 * 1024, TG_DOWNLOAD_MAX)
-    if (Number(media.size ?? 0) > max) throw new AppError('MEDIA_TOO_LARGE', 'Telegram lets a bot download files up to 20 MB; this one is {0} MB', 413, [Math.round(Number(media.size) / 1048576)])
+    const cap = this.settings.get().maxMediaMb * 1024 * 1024
+    const max = acc.kind === 'user' ? cap : Math.min(cap, TG_DOWNLOAD_MAX)
+    if (Number(media.size ?? 0) > max) {
+      if (acc.kind === 'user') throw new AppError('MEDIA_TOO_LARGE', 'This file is {0} MB, more than the limit set in Settings ({1} MB)', 413, [Math.round(Number(media.size) / 1048576), this.settings.get().maxMediaMb])
+      throw new AppError('MEDIA_TOO_LARGE', 'Telegram lets a bot download files up to 20 MB; this one is {0} MB', 413, [Math.round(Number(media.size) / 1048576)])
+    }
     const f = await acc.call<TgFile>('getFile', { file_id: media.fileId })
     if (!f.file_path) throw new AppError('MEDIA_DOWNLOAD_FAILED', 'Media download failed: {0}', 502, ['no file path'])
     const buf = await acc.requireApi().download(f.file_path, max)

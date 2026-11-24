@@ -88,7 +88,7 @@ export function localizeError(e: AppError, lang: Lang): string {
 // English long texts
 // ---------------------------------------------------------------------------
 const EN: Record<string, string> = {
-  '@instructions': `Telegram bots of the owner (Bot API): each bot reads and sends its own messages.
+  '@instructions': `Telegram bots and Telegram accounts of the owner: each one reads and sends its own messages.
 - A bot can write only to people who pressed Start in its chat and to the groups and channels it is in; it cannot write first to anyone else.
 - Chats accept a chat id (123456789, -1001234567890), an @username or an exact chat name; find people and chats with telegram_find_contact.
 - A bot sees only what happened since it was linked: telegram_list_chats and telegram_get_messages read what TeleOps stored, not older Telegram history.
@@ -96,6 +96,7 @@ const EN: Record<string, string> = {
 - Messages go out as the bot: confirm wording and recipient with the user before calling a send tool unless they explicitly asked you to send.
 - Buttons under a message: a press comes back as a [button] message in the chat and as the button.pressed event.
 - Use telegram_bots to see the bots; pass "bot" (id or @username) to use one that is not the default.
+- Telegram accounts of people (telegram_bots → kind user) use the same tools: they read the whole history of their chats from Telegram and write as that person, to anyone the app could; they cannot send buttons. Treat their chats as private.
 - Voice messages (type voice, audio or video_note): read their transcript, or call telegram_transcribe_voice to know what was said.
 - Every tool explained, with examples (Agent Skill): https://raw.githubusercontent.com/emrgim/TeleOps/main/skills/teleops/SKILL.md
 - Reply to the user in their language.`,
@@ -110,7 +111,7 @@ const EN: Record<string, string> = {
 // Italian
 // ---------------------------------------------------------------------------
 const IT: Record<string, string> = {
-  '@instructions': `Bot Telegram del proprietario (Bot API): ogni bot legge e invia i propri messaggi.
+  '@instructions': `Bot e account Telegram del proprietario: ognuno legge e invia i propri messaggi.
 - Un bot può scrivere solo alle persone che hanno premuto Avvia nella sua chat e ai gruppi e canali in cui si trova; non può scrivere per primo a nessun altro.
 - Le chat accettano un id (123456789, -1001234567890), uno @username o il nome esatto della chat; trova persone e chat con telegram_find_contact.
 - Un bot vede solo ciò che è successo da quando è collegato: telegram_list_chats e telegram_get_messages leggono quello che TeleOps ha salvato, non la cronologia Telegram precedente.
@@ -118,6 +119,7 @@ const IT: Record<string, string> = {
 - I messaggi partono come il bot: conferma testo e destinatario con l'utente prima di usare uno strumento di invio, salvo che te l'abbia chiesto esplicitamente.
 - Pulsanti sotto un messaggio: quando vengono premuti tornano come messaggio [button] nella chat e come evento button.pressed.
 - telegram_bots mostra i bot; passa "bot" (id o @username) per usarne uno diverso da quello predefinito.
+- Gli account Telegram delle persone (telegram_bots → kind user) usano gli stessi strumenti: leggono da Telegram tutta la cronologia delle loro chat e scrivono come quella persona, a chiunque potrebbe scrivere dall'app; non possono inviare pulsanti. Tratta le loro chat come private.
 - Messaggi vocali (tipo voice, audio o video_note): leggi la trascrizione, oppure usa telegram_transcribe_voice per sapere cosa è stato detto.
 - Tutti gli strumenti spiegati, con esempi (Agent Skill): https://raw.githubusercontent.com/emrgim/TeleOps/main/skills/teleops/SKILL.md
 - Rispondi all'utente nella sua lingua.`,
@@ -337,8 +339,8 @@ const IT: Record<string, string> = {
   'This bot has no profile photo': 'Questo bot non ha una foto profilo',
   'This credential cannot use bot "{0}"': 'Questa credenziale non può usare il bot "{0}"',
   'Nothing to change: give a name, a description, commands or a photo': 'Niente da cambiare: indica un nome, una descrizione, dei comandi o una foto',
-  'Read and send Telegram messages through your own bots (several bots, Bot API).': 'Leggi e invia messaggi Telegram con i tuoi bot (più bot, Bot API).',
-  'Bot to use: its id or @username. Omit for the default bot (see telegram_bots).': 'Bot da usare: il suo id o @username. Ometti per il bot predefinito (vedi telegram_bots).',
+  'Read and send Telegram messages through your own bots and Telegram accounts.': 'Leggi e invia messaggi Telegram con i tuoi bot e i tuoi account Telegram.',
+  'Bot or Telegram account to use: its id or @username. Omit for the default one (see telegram_bots).': 'Bot o account Telegram da usare: id o @username. Ometti per quello predefinito (vedi telegram_bots).',
   'Chat: chat id, @username or exact chat name': 'Chat: id della chat, @username o nome esatto della chat',
   'Text on the button': 'Testo sul pulsante',
   'Link the button opens (https://…)': 'Link che il pulsante apre (https://…)',
@@ -369,21 +371,21 @@ const IT: Record<string, string> = {
   'Hours until the link expires': 'Ore prima che il link scada',
   'How many people can join with it': 'Quante persone possono entrare con il link',
   'true = people ask to join and an administrator approves': 'true = le persone chiedono di entrare e un amministratore approva',
-  'List bots': 'Elenca i bot',
-  'List the Telegram bots linked to this server: name, @username, link, connection state, default bot, whether it reads all group messages (privacy mode off).': 'Elenca i bot Telegram collegati a questo server: nome, @username, link, stato della connessione, bot predefinito, se legge tutti i messaggi dei gruppi (privacy disattivata).',
+  'List bots and accounts': 'Elenca bot e account',
+  'List the Telegram bots and user accounts linked to this server: kind (bot or user), name, @username, link, connection state, the default one, whether a bot reads all group messages (privacy mode off).': 'Elenca i bot e gli account Telegram collegati a questo server: tipo (bot o user), nome, @username, link, stato della connessione, quello predefinito, se un bot legge tutti i messaggi dei gruppi (privacy disattivata).',
   'Get a bot\'s profile': 'Profilo di un bot',
   'Read the profile of one of the bots: name, @username, short description (about), description (shown in an empty chat), commands, profile photo, privacy mode.': 'Legge il profilo di uno dei bot: nome, @username, descrizione breve (about), descrizione (mostrata in una chat vuota), comandi, foto profilo, privacy.',
   'Edit a bot\'s profile': 'Modifica il profilo di un bot',
   'Change one of the bots ON TELEGRAM ITSELF (everyone sees it): name (1–64 characters, also its name in TeleOps), short description (about, max 120), description (max 512, shown in an empty chat), commands (the / menu), profile photo (http(s) image URL, data: URL or base64) or remove it, and privacy mode (read all group messages or only commands and replies). Confirm the change with the user first.': 'Cambia uno dei bot DIRETTAMENTE SU TELEGRAM (lo vedono tutti): nome (1–64 caratteri, è anche il suo nome in TeleOps), descrizione breve (about, max 120), descrizione (max 512, mostrata in una chat vuota), comandi (il menu /), foto profilo (URL http(s) di un’immagine, data: URL o base64) o la toglie, e privacy (leggere tutti i messaggi dei gruppi o solo comandi e risposte). Conferma prima la modifica con l’utente.',
   'Send feedback about TeleOps itself (a bug, an idea, anything else) to its developers. It opens an issue in the GitHub repository of TeleOps, signed only with this installation code: never put names, chat ids, message contents or keys in it. Show the text to the user and get their OK before sending.': 'Invia agli sviluppatori un feedback su TeleOps (un problema, un’idea, altro). Apre una issue nella repository GitHub di TeleOps, firmata solo con il codice di questa installazione: non metterci mai nomi, id di chat, contenuti di messaggi o chiavi. Mostra il testo all’utente e ottieni il suo ok prima di inviarlo.',
   'List the chats of a bot (most recent first): private chats with the people who started it, groups and channels it is in, with the last message and the bot\'s status there (member, administrator, left, kicked = blocked by the person). A bot sees only chats where something happened since it was linked.': 'Elenca le chat di un bot (dalla più recente): le chat private con le persone che l’hanno avviato, i gruppi e i canali in cui si trova, con l’ultimo messaggio e lo stato del bot lì (member, administrator, left, kicked = bloccato dalla persona). Un bot vede solo le chat in cui è successo qualcosa da quando è collegato.',
-  'Get the messages of one chat that the bot received or sent, in chronological order (oldest → newest). Use before/after (ISO date) to page. Voice messages (type voice, with seconds) carry their transcript when it is ready; when transcript is null, call telegram_transcribe_voice. Button presses appear as type button.': 'Messaggi di una chat ricevuti o inviati dal bot, in ordine cronologico (dal più vecchio al più recente). Usa before/after (data ISO) per scorrere. I messaggi vocali (tipo voice, con seconds) portano la trascrizione quando è pronta; se transcript è null, usa telegram_transcribe_voice. I pulsanti premuti compaiono come tipo button.',
-  'Full-text search across the stored messages of a bot (newest first), including what was said in transcribed voice messages.': 'Ricerca nel testo dei messaggi salvati di un bot (dal più recente), compreso ciò che è stato detto nei vocali trascritti.',
+  'Get the messages of one chat that the bot or account received or sent, in chronological order (oldest → newest). Use before/after (ISO date) to page. For a Telegram account (kind user) the history is read from Telegram itself, older messages included. Voice messages (type voice, with seconds) carry their transcript when it is ready; when transcript is null, call telegram_transcribe_voice. Button presses appear as type button.': 'Messaggi di una chat ricevuti o inviati dal bot o dall\'account, in ordine cronologico (dal più vecchio al più recente). Usa before/after (data ISO) per scorrere. Per un account Telegram (kind user) la cronologia viene letta da Telegram stesso, anche i messaggi più vecchi. I messaggi vocali (tipo voice, con seconds) portano la trascrizione quando è pronta; se transcript è null, usa telegram_transcribe_voice. I pulsanti premuti compaiono come tipo button.',
+  'Full-text search across the stored messages of a bot or account (newest first), including what was said in transcribed voice messages. A Telegram account (kind user) also searches on Telegram itself: all its chats, all the history.': 'Ricerca testuale nei messaggi salvati di un bot o account (dal più recente), compreso ciò che è stato detto nei vocali trascritti. Un account Telegram (kind user) cerca anche su Telegram stesso: tutte le sue chat, tutta la cronologia.',
   'Find people and chats': 'Trova persone e chat',
   'Find the people who wrote to a bot and the groups and channels it is in, by name, @username or id. Returns the chat ids to use with the other tools (a person\'s private chat has the same id as the person).': 'Trova le persone che hanno scritto a un bot e i gruppi e canali in cui si trova, per nome, @username o id. Restituisce gli id delle chat da usare con gli altri strumenti (la chat privata con una persona ha lo stesso id della persona).',
   'Chat details': 'Dettagli della chat',
   'A chat as Telegram describes it now: title, @username, description or bio, number of members, administrators, pinned message, and what the bot may do there (its status and rights).': 'Una chat come la descrive adesso Telegram: titolo, @username, descrizione o bio, numero di membri, amministratori, messaggio fissato e cosa può fare lì il bot (il suo stato e i suoi permessi).',
-  'Send a Telegram text message from a bot. A bot can write only to people who started it and to groups and channels it is in. Plain text longer than 4096 characters is split into several messages. Confirm recipient and text with the user first.': 'Invia un messaggio di testo Telegram da un bot. Un bot può scrivere solo alle persone che l’hanno avviato e ai gruppi e canali in cui si trova. Il testo semplice più lungo di 4096 caratteri viene diviso in più messaggi. Conferma prima destinatario e testo con l’utente.',
+  'Send a Telegram text message from a bot or a Telegram account. A bot can write only to people who started it and to groups and channels it is in; a Telegram account writes as that person, to anyone it could write to from the app (buttons are for bots only). Plain text longer than 4096 characters is split into several messages. Confirm recipient and text with the user first.': 'Invia un messaggio di testo Telegram da un bot o da un account Telegram. Un bot può scrivere solo alle persone che l’hanno avviato e ai gruppi e canali in cui si trova; un account Telegram scrive come quella persona, a chiunque potrebbe scrivere dall’app (i pulsanti solo per i bot). Il testo semplice oltre 4096 caratteri viene diviso in più messaggi. Conferma prima destinatario e testo con l’utente.',
   'Send a photo, video, audio, voice message, document, sticker, GIF (animation) or round video (video_note) from a public URL, base64 or the file_id of a file the bot already has. Up to 10 MB for photos and 50 MB for other files.': 'Invia una foto, un video, un audio, un messaggio vocale, un documento, uno sticker, una GIF (animation) o un video rotondo (video_note) da un URL pubblico, in base64 o con il file_id di un file che il bot ha già. Fino a 10 MB per le foto e 50 MB per gli altri file.',
   'Send a location pin; with name and address it is sent as a place (venue).': 'Invia una posizione sulla mappa; con nome e indirizzo viene inviata come luogo (venue).',
   'Put a reaction on a message: one emoji among the ones Telegram allows (👍 ❤ 🔥 🎉 👏 😁 🤔 👌 🙏 and others); an empty emoji removes the bot\'s reaction.': 'Mette una reazione a un messaggio: un’emoji tra quelle ammesse da Telegram (👍 ❤ 🔥 🎉 👏 😁 🤔 👌 🙏 e altre); un’emoji vuota toglie la reazione del bot.',
@@ -456,6 +458,36 @@ const IT: Record<string, string> = {
   '<b>{0}</b> is asking for access to your Telegram bots.': '<b>{0}</b> chiede accesso ai tuoi bot Telegram.',
   '<b>{0}</b> wants to connect to your Telegram bots.': '<b>{0}</b> vuole collegarsi ai tuoi bot Telegram.',
   'Configuration of the Telegram bots server (bots, database, API keys, MCP connectors).': 'Configurazione del server dei bot Telegram (bot, database, chiavi API, connettori MCP).',
+  // Telegram user accounts
+  'Account "{0}" is not connected (state: {1})': 'L\'account "{0}" non è connesso (stato: {1})',
+  'Add the Telegram app code first (api_id and api_hash from my.telegram.org)': 'Aggiungi prima il codice app Telegram (api_id e api_hash da my.telegram.org)',
+  'Buttons under a message are for bots only: a Telegram account cannot send them': 'I pulsanti sotto un messaggio sono solo per i bot: un account Telegram non può inviarli',
+  'Only bots have this, not a Telegram account': 'Questo ce l\'hanno solo i bot, non un account Telegram',
+  'Telegram asks to wait before trying again ({0})': 'Telegram chiede di aspettare prima di riprovare ({0})',
+  'Telegram does not accept this app code (api_id / api_hash): copy both again from my.telegram.org': 'Telegram non accetta questo codice app (api_id / api_hash): copiali di nuovo entrambi da my.telegram.org',
+  'Telegram has banned this phone number': 'Telegram ha bloccato questo numero di telefono',
+  'Telegram refused the login: {0}': 'Telegram ha rifiutato l\'accesso: {0}',
+  'The QR code has expired: start again': 'Il codice QR è scaduto: ricomincia',
+  'The app code comes from TELEOPS_API_ID / TELEOPS_API_HASH: change it there': 'Il codice app arriva da TELEOPS_API_ID / TELEOPS_API_HASH: cambialo lì',
+  'The code has expired: start again for a new one': 'Il codice è scaduto: ricomincia per averne uno nuovo',
+  'This Telegram id is already linked as a bot': 'Questo id Telegram è già collegato come bot',
+  'This account can edit only its own messages': 'Questo account può modificare solo i propri messaggi',
+  'This account cannot do that in this chat ({0})': 'Questo account non può farlo in questa chat ({0})',
+  'This account does not know this chat: use the id or @username of a chat it is in or a person it can write to': 'Questo account non conosce questa chat: usa l\'id o lo @username di una chat in cui si trova o di una persona a cui può scrivere',
+  'This account has a two-step verification password': 'Questo account ha una password di verifica in due passaggi',
+  'This account is not a member of this chat': 'Questo account non fa parte di questa chat',
+  'This file is {0} MB, more than the limit set in Settings ({1} MB)': 'Questo file è di {0} MB, più del limite impostato nelle Impostazioni ({1} MB)',
+  'This login is not waiting for a code': 'Questo accesso non sta aspettando un codice',
+  'This login is not waiting for a password': 'Questo accesso non sta aspettando una password',
+  'This login is over (finished, cancelled or left for 10 minutes): start again': 'Questo accesso è chiuso (finito, annullato o lasciato per 10 minuti): ricomincia',
+  'This number has no Telegram account: create it in the Telegram app first': 'Questo numero non ha un account Telegram: crealo prima nell\'app Telegram',
+  'This person does not accept messages from this account ({0})': 'Questa persona non accetta messaggi da questo account ({0})',
+  'This phone number is not valid: write it with the country code, like +971 50 123 4567': 'Questo numero di telefono non è valido: scrivilo con il prefisso internazionale, tipo +39 333 123 4567',
+  'Too many logins in progress: finish or cancel one first': 'Troppi accessi in corso: finiscine o annullane uno prima',
+  'Wrong code: check it in Telegram and type it again': 'Codice sbagliato: controllalo in Telegram e scrivilo di nuovo',
+  'Wrong password: it is the two-step verification password of this Telegram account': 'Password sbagliata: è la password di verifica in due passaggi di questo account Telegram',
+  'You blocked this person on Telegram: unblock them first': 'Hai bloccato questa persona su Telegram: sbloccala prima',
+  'api_id is a number and api_hash 32 letters and digits: copy both from my.telegram.org → API development tools': 'api_id è un numero e api_hash 32 lettere e cifre: copiali entrambi da my.telegram.org → API development tools',
 }
 
 /** All translatable keys (used by tests to make sure Italian covers every English string). */

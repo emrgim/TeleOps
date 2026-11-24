@@ -89,7 +89,9 @@ $('#logout').addEventListener('click', run(async () => { await api('POST', '/aut
 
 // ---------------------------------------------------------------- bots
 const STATE_CLASS = { open: 'open', connecting: 'warn', reconnecting: 'warn', conflict: 'bad', unauthorized: 'bad', not_linked: 'bad', error: 'bad', stopped: '' }
-function badge(s) { return `<span class="badge ${STATE_CLASS[s] ?? ''}">${esc(t('state.' + s))}</span>` }
+// a Telegram account has no token: logged out / not logged in instead
+const USER_STATES = ['unauthorized', 'not_linked']
+function badge(s, kind) { return `<span class="badge ${STATE_CLASS[s] ?? ''}">${esc(t((kind === 'user' && USER_STATES.includes(s) ? 'state.user.' : 'state.') + s))}</span>` }
 
 async function loadOverview() {
   state.overview = await api('GET', '/v1/admin/overview')
@@ -111,15 +113,16 @@ function renderAccounts() {
     const st = a.stats
     const conflict = a.state === 'conflict'
     return `<div class="card acc" data-id="${esc(a.id)}">
-      <div class="top"><div class="who">${avatar(a)}<div><h4>${esc(a.name)} ${a.default ? `<span class="badge">${esc(t('acc.default'))}</span>` : ''}</h4>
-        <div class="phone">${a.username ? `<a href="${esc(a.link)}" target="_blank" rel="noopener">@${esc(a.username)}</a>` : '—'}</div>${a.about ? `<div class="muted small about">${esc(a.about)}</div>` : ''}<div class="muted small">id <code>${esc(a.id)}</code></div></div></div>${badge(a.state)}</div>
+      <div class="top"><div class="who">${avatar(a)}<div><h4>${esc(a.name)} <span class="badge">${esc(a.kind === 'user' ? t('acc.kindUser') : t('acc.kindBot'))}</span> ${a.default ? `<span class="badge">${esc(t('acc.default'))}</span>` : ''}</h4>
+        <div class="phone">${a.username ? `<a href="${esc(a.link)}" target="_blank" rel="noopener">@${esc(a.username)}</a>` : a.phone ? esc(a.phone) : '—'}</div>${a.about ? `<div class="muted small about">${esc(a.about)}</div>` : ''}<div class="muted small">id <code>${esc(a.id)}</code></div></div></div>${badge(a.state, a.kind)}</div>
       ${st ? `<div class="stats"><span><b>${num(st.chats)}</b> ${esc(t('acc.chats'))}</span><span><b>${num(st.messages)}</b> ${esc(t('acc.messages'))}</span><span><b>${num(st.people)}</b> ${esc(t('acc.people'))}</span><span><b>${num(st.groups)}</b> ${esc(t('acc.groups'))}</span>${st.channels ? `<span><b>${num(st.channels)}</b> ${esc(t('acc.channels'))}</span>` : ''}</div>` : ''}
       ${a.readsAllGroupMessages === false ? `<div class="muted small">${esc(t('acc.privacyOn'))}</div>` : ''}
       ${a.lastError && a.state !== 'open' ? `<div class="muted small">${esc(t('acc.lastError', a.lastError.reason))}</div>` : ''}
       <div class="actions">
         <button class="small" data-act="profile">${esc(t('acc.profile'))}</button>
         ${conflict ? `<button class="small" data-act="takeover">${esc(t('acc.takeOver'))}</button>` : ''}
-        ${a.state === 'unauthorized' ? `<button class="small" data-act="token">${esc(t('acc.newToken'))}</button>` : ''}
+        ${a.state === 'unauthorized' && a.kind !== 'user' ? `<button class="small" data-act="token">${esc(t('acc.newToken'))}</button>` : ''}
+        ${(a.state === 'unauthorized' || a.state === 'not_linked') && a.kind === 'user' ? `<button class="small" data-act="relink">${esc(t('acc.relink'))}</button>` : ''}
         ${a.enabled && !['open', 'conflict', 'unauthorized'].includes(a.state) ? `<button class="small ghost" data-act="restart">${esc(t('acc.reconnect'))}</button>` : ''}
         ${!a.default ? `<button class="small ghost" data-act="default">${esc(t('acc.makeDefault'))}</button>` : ''}
         <button class="small ghost" data-act="toggle">${esc(t(a.enabled ? 'acc.pause' : 'acc.resume'))}</button>
@@ -136,6 +139,7 @@ $('#accounts').addEventListener('click', run(async (e) => {
   switch (b.dataset.act) {
     case 'profile': return openProfile(id)
     case 'token': return openAdd()
+    case 'relink': return openUserLogin()
     case 'restart': await api('POST', `/v1/bots/${id}/restart`, {}); toast(t('acc.reconnecting')); break
     case 'takeover':
       if (!confirm(t('confirm.takeOver', a.name))) return
@@ -150,7 +154,13 @@ $('#accounts').addEventListener('click', run(async (e) => {
 }))
 
 function openAdd() { $('#addForm').reset(); $('#addDlg').showModal(); $('#addForm').token.focus() }
-$('#addBot').addEventListener('click', openAdd)
+// + : a bot (token from @BotFather) or a Telegram account (QR code or phone number)
+$('#addBot').addEventListener('click', () => $('#kindDlg').showModal())
+$$('#kindDlg [data-kind]').forEach((b) => b.addEventListener('click', run(async () => {
+  $('#kindDlg').close('cancel')
+  if (b.dataset.kind === 'user') await openUserLogin()
+  else openAdd()
+})))
 $('#addDlg').addEventListener('close', run(async () => {
   if ($('#addDlg').returnValue !== 'ok') return
   const token = $('#addForm').token.value.trim()
@@ -166,6 +176,80 @@ $('#addDlg').addEventListener('close', run(async () => {
   toast(t(r.created ? 'bots.added' : 'bots.tokenReplaced', r.name))
   await loadOverview()
 }))
+
+// ---------------------------------------------------------------- Telegram accounts: QR code or phone number (+ code, + password)
+let login = null
+let loginPoll = null
+function userPane(name) {
+  $$('#userDlg [data-pane]').forEach((p) => { p.hidden = p.dataset.pane !== name })
+  $('#userErr').textContent = ''
+}
+async function openUserLogin() {
+  login = null
+  $('#userForm').reset()
+  const app = await api('GET', '/v1/users/app')
+  userPane(app.configured ? 'method' : 'app')
+  $('#userDlg').showModal()
+}
+function showLogin(v) {
+  login = v
+  clearTimeout(loginPoll)
+  if (v.state === 'qr') {
+    if (v.qr && $('#userQrImg').getAttribute('src') !== v.qr.image) $('#userQrImg').src = v.qr.image
+    if ($('#userDlg [data-pane=qr]').hidden) userPane('qr')
+    loginPoll = setTimeout(pollLogin, 2000)
+  } else if (v.state === 'code') {
+    $('#userCodeVia').textContent = v.codeVia === 'sms' ? t('user.codeSms', v.phone || '') : t('user.codeApp', v.phone || '')
+    userPane('code')
+    $('#userForm').code.focus()
+  } else if (v.state === 'password') {
+    $('#userPwHint').textContent = v.hint ? t('user.hint', v.hint) : ''
+    userPane('password')
+    $('#userForm').password.focus()
+  } else if (v.state === 'done') {
+    $('#userDone').textContent = t('user.done', v.account?.name || '')
+    userPane('done')
+    login = null
+    void loadOverview()
+  } else if (v.state === 'error') {
+    login = null
+    userPane('method')
+    $('#userErr').textContent = v.error?.message || ''
+  }
+}
+async function pollLogin() {
+  if (!login || !$('#userDlg').open) return
+  try { showLogin(await api('GET', `/v1/users/login/${encodeURIComponent(login.id)}`)) } catch (e) { login = null; userPane('method'); $('#userErr').textContent = e.message }
+}
+// a refusal (wrong code, wrong password…) stays in the dialog, under the field;
+// an app code Telegram does not accept goes back to api_id / api_hash
+const step = (fn) => async () => {
+  try { await fn() } catch (e) {
+    if (e.code === 'BAD_TELEGRAM_APP') userPane('app')
+    $('#userErr').textContent = e.message
+  }
+}
+$('#userAppGo').addEventListener('click', step(async () => {
+  const f = $('#userForm')
+  await api('PUT', '/v1/users/app', { apiId: f.apiId.value.trim(), apiHash: f.apiHash.value.trim() })
+  userPane('method')
+}))
+$('#userQrGo').addEventListener('click', step(async () => showLogin(await api('POST', '/v1/users/login', { method: 'qr' }))))
+$('#userPhoneOpen').addEventListener('click', () => { userPane('phone'); $('#userForm').phone.focus() })
+$('#userPhoneGo').addEventListener('click', step(async () => showLogin(await api('POST', '/v1/users/login', { method: 'phone', phone: $('#userForm').phone.value }))))
+$('#userCodeGo').addEventListener('click', step(async () => showLogin(await api('POST', `/v1/users/login/${encodeURIComponent(login.id)}/code`, { code: $('#userForm').code.value }))))
+$('#userPwGo').addEventListener('click', step(async () => showLogin(await api('POST', `/v1/users/login/${encodeURIComponent(login.id)}/password`, { password: $('#userForm').password.value }))))
+// Enter presses the button of the step on screen instead of closing the dialog
+$('#userForm').addEventListener('submit', (e) => {
+  if (e.submitter?.value === 'cancel') return
+  e.preventDefault()
+  $$('#userDlg [data-pane]').find((p) => !p.hidden)?.querySelector('.row button')?.click()
+})
+$('#userDlg').addEventListener('close', () => {
+  clearTimeout(loginPoll)
+  if (login) void api('DELETE', `/v1/users/login/${encodeURIComponent(login.id)}`).catch(() => {})
+  login = null
+})
 
 // ---------------------------------------------------------------- profile (name · descriptions · commands · photo, changed on Telegram)
 function initials(name) { return String(name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() }
@@ -199,6 +283,8 @@ async function openProfile(id) {
   f.description.value = profCur.description ?? ''
   f.commands.value = cmdsToText(profCur.commands)
   f.readAll.checked = !!profCur.readsAllGroupMessages
+  // a person has a name, a bio and a photo; descriptions, commands and privacy mode are for bots
+  $$('#profForm .bot-only').forEach((el) => { el.hidden = a.kind === 'user' })
   $('#profRemovePhoto').hidden = !profCur.photo
   $('#profDlg').showModal()
 }

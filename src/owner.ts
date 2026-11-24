@@ -43,8 +43,10 @@ export class OwnerLink {
   /** The t.me link that links the owner's Telegram (valid 15 minutes unless asked otherwise, once). */
   async startLink(botId?: string, minutes = LINK_MINUTES): Promise<{ url: string; bot: string; username: string; expiresInMin: number }> {
     const mins = Math.min(1440, Math.max(1, Math.round(minutes)))
-    const acc = botId ? this.accounts.get(botId) : this.accounts.list().find((a) => a.row.is_default && a.state === 'open') ?? this.accounts.list().find((a) => a.state === 'open')
-    if (!acc) throw new AppError('NO_CONNECTED_BOT', 'Link a bot first: the code comes from one of your bots', 409)
+    // only a bot has a t.me/<bot>?start= link: a Telegram user account cannot be "started"
+    const bots = this.accounts.list().filter((a) => a.kind === 'bot')
+    const acc = botId ? this.accounts.get(botId) : bots.find((a) => a.row.is_default && a.state === 'open') ?? bots.find((a) => a.state === 'open')
+    if (!acc || acc.kind !== 'bot') throw new AppError('NO_CONNECTED_BOT', 'Link a bot first: the code comes from one of your bots', 409)
     if (acc.state !== 'open') throw new AppError('NOT_CONNECTED', 'Bot "{0}" is not connected (state: {1})', 409, [acc.displayName(), acc.state])
     if (!acc.row.username) throw new AppError('NO_USERNAME', 'This bot has no username on Telegram', 409)
     const token = await this.admin.createLoginToken('owner', mins * 60_000)
@@ -72,7 +74,7 @@ export class OwnerLink {
   async sendCode(code: string, lang = defaultLang()): Promise<string> {
     const owner = await this.get()
     if (!owner) throw new AppError('NO_OWNER', 'Link your Telegram account first (Settings → General), or use a login link', 409)
-    const open = this.accounts.list().filter((a) => a.state === 'open' || a.state === 'conflict' || a.state === 'reconnecting')
+    const open = this.accounts.list().filter((a) => a.kind === 'bot' && (a.state === 'open' || a.state === 'conflict' || a.state === 'reconnecting'))
     const list = [...open.filter((a) => a.id === owner.bot), ...open.filter((a) => a.id !== owner.bot)]
     if (!list.length) throw new AppError('NO_CONNECTED_BOT', 'No connected bot to send the code with. Use a login link.', 409)
     let last: unknown

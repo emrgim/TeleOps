@@ -14,6 +14,7 @@ import type { VoiceService } from './voice.js'
 import { AppError } from './util.js'
 import type { BackupService } from './backup.js'
 import type { OwnerLink } from './owner.js'
+import type { UserLogins } from './tg/user/login.js'
 
 export type App = {
   h: DbHandle
@@ -31,6 +32,7 @@ export type App = {
   voice: VoiceService
   backup: BackupService
   owner: OwnerLink
+  logins: UserLogins
   restart: (reason: string) => void
 }
 

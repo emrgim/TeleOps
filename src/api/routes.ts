@@ -18,6 +18,7 @@ import { defaultLang, reqLang, setServerLanguage, tr } from '../i18n.js'
 import { currentTheme, desktopTheme } from '../theme.js'
 import type { Readable } from 'node:stream'
 import { listFolders, makeFolder } from '../backup.js'
+import { setTelegramApp, telegramApp } from '../tg/user/app.js'
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -227,7 +228,7 @@ export function registerRoutes(fastify: FastifyInstance, app: App): void {
   const tags = (t: string) => ({ tags: [t], security: [{ bearer: [] }] })
   const idParam = z.object({ id: z.string() })
 
-  f.get('/v1/bots', { preHandler: guard('read'), schema: { ...tags('Bots'), summary: 'List the Telegram bots' } }, async (req) => visibleAccounts(app, P(req)).map((a) => a.status()))
+  f.get('/v1/bots', { preHandler: guard('read'), schema: { ...tags('Bots'), summary: 'List the Telegram bots and accounts' } }, async (req) => visibleAccounts(app, P(req)).map((a) => a.status()))
 
   f.post(
     '/v1/bots',
@@ -325,6 +326,60 @@ export function registerRoutes(fastify: FastifyInstance, app: App): void {
       return a.status()
     },
   )
+
+  // ------------------------------------------------------------------ Telegram user accounts (QR or phone login)
+  // they appear in /v1/bots with kind "user" and work with every call there and in the MCP tools
+  const appOut = async () => {
+    const a = await telegramApp(app.h)
+    return { configured: !!a, apiId: a?.apiId ?? null, fromEnv: a?.source === 'env', apiHashSet: !!a }
+  }
+  f.get('/v1/users/app', { preHandler: guard('admin'), schema: { ...tags('Accounts'), summary: 'The Telegram app code of this installation (api_id; the api_hash is never shown)' } }, async () => appOut())
+  f.put(
+    '/v1/users/app',
+    {
+      preHandler: guard('admin'),
+      schema: {
+        ...tags('Accounts'),
+        summary: 'Set the Telegram app code (my.telegram.org → API development tools): every Telegram account logs in through it',
+        body: z.object({ apiId: z.union([z.number(), z.string()]), apiHash: z.string().min(1).max(64) }),
+      },
+    },
+    async (req) => {
+      if ((await telegramApp(app.h))?.source === 'env') throw new AppError('APP_FROM_ENV', 'The app code comes from TELEOPS_API_ID / TELEOPS_API_HASH: change it there', 409)
+      await setTelegramApp(app.h, req.body.apiId, req.body.apiHash)
+      return appOut()
+    },
+  )
+  f.post(
+    '/v1/users/login',
+    {
+      preHandler: guard('admin'),
+      schema: {
+        ...tags('Accounts'),
+        summary: 'Link a Telegram account: method qr (scan with the phone: Settings → Devices → Link Desktop Device) or phone (then the code, and the password if the account has one)',
+        body: z.object({ method: z.enum(['qr', 'phone']), phone: z.string().max(32).optional() }),
+      },
+    },
+    async (req, reply) => reply.code(201).send(await app.logins.start(req.body.method, req.body.phone, reqLang(req))),
+  )
+  const loginParam = z.object({ id: z.string().max(64) })
+  f.get('/v1/users/login/:id', { preHandler: guard('admin'), schema: { ...tags('Accounts'), summary: 'Where a login is: qr (a new code every 30 s), code, password, done, error', params: loginParam } }, async (req) =>
+    app.logins.view(req.params.id, reqLang(req)),
+  )
+  f.post(
+    '/v1/users/login/:id/code',
+    { preHandler: guard('admin'), schema: { ...tags('Accounts'), summary: 'The code Telegram sent (in the Telegram app, or by SMS)', params: loginParam, body: z.object({ code: z.string().min(1).max(16) }) } },
+    async (req) => app.logins.code(req.params.id, req.body.code, reqLang(req)),
+  )
+  f.post(
+    '/v1/users/login/:id/password',
+    { preHandler: guard('admin'), schema: { ...tags('Accounts'), summary: 'The two-step verification password of the account', params: loginParam, body: z.object({ password: z.string().min(1).max(256) }) } },
+    async (req) => app.logins.password(req.params.id, req.body.password, reqLang(req)),
+  )
+  f.delete('/v1/users/login/:id', { preHandler: guard('admin'), schema: { ...tags('Accounts'), summary: 'Stop a login', params: loginParam } }, async (req) => {
+    await app.logins.cancel(req.params.id)
+    return { ok: true }
+  })
 
   // ------------------------------------------------------------------ chats & messages
   f.get(

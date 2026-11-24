@@ -27,7 +27,7 @@ export function buildMcpServer(app: App, p: Principal, origin: string, lang: Lan
       name: 'teleops',
       title: 'TeleOps',
       version: VERSION,
-      description: L('Read and send Telegram messages through your own bots (several bots, Bot API).'),
+      description: L('Read and send Telegram messages through your own bots and Telegram accounts.'),
       websiteUrl: origin,
       icons: [
         { src: `${origin}/favicon.svg`, mimeType: 'image/svg+xml', sizes: ['any'] },
@@ -37,7 +37,7 @@ export function buildMcpServer(app: App, p: Principal, origin: string, lang: Lan
     { capabilities: { tools: {}, logging: {} }, instructions: L('@instructions') },
   )
 
-  const bot = z.string().optional().describe(L('Bot to use: its id or @username. Omit for the default bot (see telegram_bots).'))
+  const bot = z.string().optional().describe(L('Bot or Telegram account to use: its id or @username. Omit for the default one (see telegram_bots).'))
   const chatArg = z.string().describe(L('Chat: chat id, @username or exact chat name'))
   const button = z.object({
     text: z.string().min(1).max(64).describe(L('Text on the button')),
@@ -78,10 +78,10 @@ export function buildMcpServer(app: App, p: Principal, origin: string, lang: Lan
 
   const acc = (id?: string) => accountFor(app, p, id)
 
-  tool('telegram_bots', 'List bots', 'List the Telegram bots linked to this server: name, @username, link, connection state, default bot, whether it reads all group messages (privacy mode off).', 'read', {}, { readOnlyHint: true }, async () =>
+  tool('telegram_bots', 'List bots and accounts', 'List the Telegram bots and user accounts linked to this server: kind (bot or user), name, @username, link, connection state, the default one, whether a bot reads all group messages (privacy mode off).', 'read', {}, { readOnlyHint: true }, async () =>
     visibleAccounts(app, p).map((a) => {
       const s = a.status()
-      return { id: s.id, name: s.name, username: s.username, link: s.link, about: s.about, state: s.state, default: s.default, readsAllGroupMessages: s.readsAllGroupMessages }
+      return { id: s.id, kind: s.kind, name: s.name, username: s.username, link: s.link, about: s.about, state: s.state, default: s.default, readsAllGroupMessages: s.readsAllGroupMessages }
     }),
   )
 
@@ -169,7 +169,7 @@ export function buildMcpServer(app: App, p: Principal, origin: string, lang: Lan
   tool(
     'telegram_get_messages',
     'Read chat messages',
-    'Get the messages of one chat that the bot received or sent, in chronological order (oldest → newest). Use before/after (ISO date) to page. Voice messages (type voice, with seconds) carry their transcript when it is ready; when transcript is null, call telegram_transcribe_voice. Button presses appear as type button.',
+    'Get the messages of one chat that the bot or account received or sent, in chronological order (oldest → newest). Use before/after (ISO date) to page. For a Telegram account (kind user) the history is read from Telegram itself, older messages included. Voice messages (type voice, with seconds) carry their transcript when it is ready; when transcript is null, call telegram_transcribe_voice. Button presses appear as type button.',
     'read',
     {
       chat: chatArg,
@@ -185,7 +185,7 @@ export function buildMcpServer(app: App, p: Principal, origin: string, lang: Lan
   tool(
     'telegram_search_messages',
     'Search messages',
-    'Full-text search across the stored messages of a bot (newest first), including what was said in transcribed voice messages.',
+    'Full-text search across the stored messages of a bot or account (newest first), including what was said in transcribed voice messages. A Telegram account (kind user) also searches on Telegram itself: all its chats, all the history.',
     'read',
     {
       query: z.string().min(1).describe(L('Text to search for')),
@@ -221,7 +221,7 @@ export function buildMcpServer(app: App, p: Principal, origin: string, lang: Lan
   tool(
     'telegram_send_text',
     'Send text message',
-    'Send a Telegram text message from a bot. A bot can write only to people who started it and to groups and channels it is in. Plain text longer than 4096 characters is split into several messages. Confirm recipient and text with the user first.',
+    'Send a Telegram text message from a bot or a Telegram account. A bot can write only to people who started it and to groups and channels it is in; a Telegram account writes as that person, to anyone it could write to from the app (buttons are for bots only). Plain text longer than 4096 characters is split into several messages. Confirm recipient and text with the user first.',
     'send',
     {
       to: z.string().describe(L('Recipient: chat id, @username or exact chat name')),

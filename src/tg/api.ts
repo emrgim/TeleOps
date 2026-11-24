@@ -23,6 +23,20 @@ export class TgApiError extends Error {
 
 export type Upload = { field: string; data: Buffer; fileName: string; mimetype?: string }
 
+export type CallOpts = { files?: Upload[]; signal?: AbortSignal; timeoutMs?: number }
+
+/**
+ * What an account talks to: the Bot API for a bot, or the same calls answered over MTProto for a
+ * Telegram user account (src/tg/user), so the rest of TeleOps works the same for both.
+ */
+export interface TgCaller {
+  call<T>(method: string, params?: Record<string, unknown>, opts?: CallOpts): Promise<T>
+  /** Download a file that getFile returned. */
+  download(filePath: string, maxBytes: number, signal?: AbortSignal): Promise<Buffer>
+  /** Remove secrets from a text before it is shown or logged. */
+  scrub(s: string): string
+}
+
 /** A bot token: `<bot id>:<secret>`. */
 export const TOKEN_RE = /^(\d{3,20}):[A-Za-z0-9_-]{30,64}$/
 
@@ -32,7 +46,7 @@ export function botIdOf(token: string): string {
   return m[1]
 }
 
-export class BotApi {
+export class BotApi implements TgCaller {
   readonly id: string
 
   constructor(
@@ -47,7 +61,7 @@ export class BotApi {
     return String(s ?? '').split(this.token).join('<token>')
   }
 
-  async call<T>(method: string, params: Record<string, unknown> = {}, opts: { files?: Upload[]; signal?: AbortSignal; timeoutMs?: number } = {}): Promise<T> {
+  async call<T>(method: string, params: Record<string, unknown> = {}, opts: CallOpts = {}): Promise<T> {
     const url = `${this.base}/bot${this.token}/${method}`
     const clean = Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== null))
     let body: string | FormData

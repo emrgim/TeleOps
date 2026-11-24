@@ -113,7 +113,7 @@ Expand-Archive -Force $env:TEMP\teleops.zip "$HOME\.claude\skills"
 
 | Tool | Scope | What it does |
 |---|---|---|
-| `telegram_bots` | read | List the Telegram bots linked to this server: name, @username, link, connection state, default bot, whether it reads all group messages (privacy mode off). |
+| `telegram_bots` | read | List the Telegram bots and user accounts linked to this server: kind (bot or user), name, @username, link, connection state, the default one, whether a bot reads all group messages (privacy mode off). |
 | `telegram_get_profile` | read | Read the profile of one of the bots: name, @username, short description (about), description (shown in an empty chat), commands, profile photo, privacy mode. |
 | `telegram_update_profile` | send | Change one of the bots ON TELEGRAM ITSELF (everyone sees it): name (1–64 characters, also its name in TeleOps), short description (about, max 120), description (max 512, shown in an empty chat), commands (the / menu), profile photo (http(s) image URL, data: URL or base64) or remove it, and privacy mode (read all group messages or only commands and replies). |
 
@@ -122,8 +122,8 @@ Expand-Archive -Force $env:TEMP\teleops.zip "$HOME\.claude\skills"
 | Tool | Scope | What it does |
 |---|---|---|
 | `telegram_list_chats` | read | List the chats of a bot (most recent first): private chats with the people who started it, groups and channels it is in, with the last message and the bot's status there (member, administrator, left, kicked = blocked by the person). |
-| `telegram_get_messages` | read | Get the messages of one chat that the bot received or sent, in chronological order (oldest → newest). |
-| `telegram_search_messages` | read | Full-text search across the stored messages of a bot (newest first), including what was said in transcribed voice messages. |
+| `telegram_get_messages` | read | Get the messages of one chat that the bot or account received or sent, in chronological order (oldest → newest). |
+| `telegram_search_messages` | read | Full-text search across the stored messages of a bot or account (newest first), including what was said in transcribed voice messages. |
 | `telegram_download_media` | read | Get the media of a message (Telegram lets bots download files up to 20 MB): returns a temporary download link (1 h) and, for small images, the image itself. |
 | `telegram_transcribe_voice` | read | Transcribe a Telegram voice message, audio file or round video (type voice, audio or video_note) to text, so you know what was said. |
 
@@ -138,7 +138,7 @@ Expand-Archive -Force $env:TEMP\teleops.zip "$HOME\.claude\skills"
 
 | Tool | Scope | What it does |
 |---|---|---|
-| `telegram_send_text` | send | Send a Telegram text message from a bot. |
+| `telegram_send_text` | send | Send a Telegram text message from a bot or a Telegram account. |
 | `telegram_send_media` | send | Send a photo, video, audio, voice message, document, sticker, GIF (animation) or round video (video_note) from a public URL, base64 or the file_id of a file the bot already has. |
 | `telegram_send_location` | send | Send a location pin; with name and address it is sent as a place (venue). |
 
