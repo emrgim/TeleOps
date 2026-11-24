@@ -35,11 +35,14 @@ type Login = {
   error?: AppError
   account?: unknown
   touched: number
+  started: number
   timer?: ReturnType<typeof setTimeout>
   busy?: boolean
 }
 
 const IDLE_MS = 10 * 60_000
+/** A QR code nobody scans is not renewed for ever: after this the page says to start again. */
+const QR_MAX_MS = 10 * 60_000
 const MAX_LOGINS = 5
 
 const rpc = (e: unknown) => String((e as { errorMessage?: string })?.errorMessage ?? '')
@@ -113,7 +116,7 @@ export class UserLogins {
     const app = await this.deps.app()
     if (!app) throw new AppError('NO_TELEGRAM_APP', 'Add the Telegram app code first (api_id and api_hash from my.telegram.org)', 409)
     const number = method === 'phone' ? normalizePhone(phone) : undefined
-    const l: Login = { id: 'tgl_' + crypto.randomBytes(12).toString('base64url'), method, state: method === 'qr' ? 'qr' : 'code', client: newClient('', app), app, touched: Date.now() }
+    const l: Login = { id: 'tgl_' + crypto.randomBytes(12).toString('base64url'), method, state: method === 'qr' ? 'qr' : 'code', client: newClient('', app), app, touched: Date.now(), started: Date.now() }
     try {
       await l.client.connect()
       this.list.set(l.id, l)
@@ -143,6 +146,9 @@ export class UserLogins {
   /** Ask Telegram for the QR token again: a new code (they last 30 s), or the account if it was scanned. */
   private async qrStep(l: Login): Promise<void> {
     if (l.busy || l.state === 'done' || !this.list.has(l.id)) return
+    // the page is gone (nobody asks for the code any more): stop asking Telegram for new ones
+    if (Date.now() - l.touched > IDLE_MS) return void this.cancel(l.id)
+    if (Date.now() - l.started > QR_MAX_MS) return this.fail(l, new AppError('QR_EXPIRED', 'The QR code has expired: start again', 400))
     l.busy = true
     try {
       let r = await l.client.invoke(new Api.auth.ExportLoginToken({ apiId: l.app.apiId, apiHash: l.app.apiHash, exceptIds: [] }))
