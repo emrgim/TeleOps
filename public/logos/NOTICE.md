@@ -7,3 +7,4 @@ Shown only to say which apps TeleOps connects to. Every name and logo is a trade
 - `grokbot.png` — Grok Bot app icon.
 - `currentrms.png` — Current RMS / OnRent Events (Klipboard) mark, from current-rms.com.
 - `rentman.png` — Rentman mark, from rentman.io.
+- `plugin.svg` — puzzle piece drawn for TeleOps (MIT, like the code).

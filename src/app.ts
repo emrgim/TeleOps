@@ -15,6 +15,7 @@ import { AppError } from './util.js'
 import type { BackupService } from './backup.js'
 import type { OwnerLink } from './owner.js'
 import type { UserLogins } from './tg/user/login.js'
+import type { PluginManager } from './plugins/manager.js'
 
 export type App = {
   h: DbHandle
@@ -33,6 +34,7 @@ export type App = {
   backup: BackupService
   owner: OwnerLink
   logins: UserLogins
+  plugins: PluginManager
   restart: (reason: string) => void
 }
 

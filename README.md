@@ -32,6 +32,10 @@ Explained one by one, with parameters, in the [agent skill](skills/teleops/refer
 
 `telegram_bots`, `telegram_get_profile`, `telegram_update_profile`, `telegram_list_chats`, `telegram_get_messages`, `telegram_search_messages`, `telegram_download_media`, `telegram_transcribe_voice`, `telegram_find_contact`, `telegram_get_chat`, `telegram_send_text`, `telegram_send_media`, `telegram_send_location`, `telegram_react`, `telegram_edit_message`, `telegram_delete_message`, `telegram_forward_message`, `telegram_pin_message`, `telegram_invite_link`, `teleops_feedback`.
 
+## Plugins
+
+A plugin adds features — MCP tools, automations on messages, web addresses for other services — and is a **public GitHub repository** with a `teleops-plugin.json` at its top. **Connectors → Plugins → +**, paste the repository's address, **Check**, **Install**. Build yours from the [plugin template](https://github.com/emrgim/teleops-plugin-template); everything a plugin can do is in the [plugin guide](docs/plugins.md).
+
 ## Install
 
 From source (Node.js 24+):
@@ -50,10 +54,19 @@ As a service on Linux: `deploy/teleops.service` (systemd user unit).
 ### Add a bot
 
 1. On Telegram, open **@BotFather** → `/newbot` (or `/mybots` → API Token for a bot you already have) and copy the token.
-2. TeleOps → **Bots → Add bot** → paste the token.
+2. TeleOps → **Accounts → + → Bot** → paste the token.
 3. Optional: in the bot's **Profile**, set the descriptions, the `/` commands, and *Read every message in groups* if the bot must see all group messages (privacy mode off).
 
 A bot can be read by one program at a time: if another program uses the same token, stop it (TeleOps shows *Another reader*). If the bot sends its updates to a webhook, TeleOps asks before removing it.
+
+### Add a Telegram account
+
+A person's account (yours or a colleague's) instead of a bot: it reads the whole history of its chats and writes as that person.
+
+1. Once for each TeleOps, create a **Telegram app**: Telegram lets a program log in to an account only through an app registered by its owner — without it, linking does not work. Open [my.telegram.org](https://my.telegram.org/apps), log in with your number, open **API development tools**, create an app (any name) and copy **api_id** and **api_hash**. TeleOps asks for them the first time (they stay in **Settings → General → Telegram app**), or set `TELEOPS_API_ID` / `TELEOPS_API_HASH`.
+2. TeleOps → **Accounts → + → Telegram account** → **QR code** (on the phone: Telegram → Settings → Devices → Link Desktop Device) or **Phone number** (then the code Telegram sends, and the password if the account has one).
+
+The session is stored sealed with a key kept next to the data (`user-sessions.key`): a copy of the database alone does not open the account. It appears in Telegram → Settings → Devices as TeleOps, and can be closed from there.
 
 ### Connect an agent
 

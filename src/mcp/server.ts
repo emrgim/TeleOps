@@ -425,6 +425,17 @@ export function buildMcpServer(app: App, p: Principal, origin: string, lang: Lan
     },
   )
 
+  // tools added by plugins (Connectors → Plugins), named <plugin>_<tool>
+  for (const t of app.plugins?.tools() ?? []) {
+    try {
+      tool(t.name, t.title, t.description, t.scope, t.shape, { readOnlyHint: t.scope === 'read', openWorldHint: true }, async (a) =>
+        t.run(a as Record<string, unknown>, { accounts: p.accounts === '*' ? '*' : [...p.accounts] }),
+      )
+    } catch (e) {
+      logger.warn({ tool: t.name, err: String((e as Error)?.message ?? e) }, 'plugin tool skipped')
+    }
+  }
+
   return server
 }
 

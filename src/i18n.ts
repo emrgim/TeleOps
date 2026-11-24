@@ -97,6 +97,7 @@ const EN: Record<string, string> = {
 - Buttons under a message: a press comes back as a [button] message in the chat and as the button.pressed event.
 - Use telegram_bots to see the bots; pass "bot" (id or @username) to use one that is not the default.
 - Telegram accounts of people (telegram_bots → kind user) use the same tools: they read the whole history of their chats from Telegram and write as that person, to anyone the app could; they cannot send buttons. Treat their chats as private.
+- Tools named <plugin>_<tool> come from plugins the owner installed: their description says what they do.
 - Voice messages (type voice, audio or video_note): read their transcript, or call telegram_transcribe_voice to know what was said.
 - Every tool explained, with examples (Agent Skill): https://raw.githubusercontent.com/emrgim/TeleOps/main/skills/teleops/SKILL.md
 - Reply to the user in their language.`,
@@ -120,6 +121,7 @@ const IT: Record<string, string> = {
 - Pulsanti sotto un messaggio: quando vengono premuti tornano come messaggio [button] nella chat e come evento button.pressed.
 - telegram_bots mostra i bot; passa "bot" (id o @username) per usarne uno diverso da quello predefinito.
 - Gli account Telegram delle persone (telegram_bots → kind user) usano gli stessi strumenti: leggono da Telegram tutta la cronologia delle loro chat e scrivono come quella persona, a chiunque potrebbe scrivere dall'app; non possono inviare pulsanti. Tratta le loro chat come private.
+- Gli strumenti chiamati <plugin>_<strumento> vengono dai plugin installati dal proprietario: la loro descrizione dice cosa fanno.
 - Messaggi vocali (tipo voice, audio o video_note): leggi la trascrizione, oppure usa telegram_transcribe_voice per sapere cosa è stato detto.
 - Tutti gli strumenti spiegati, con esempi (Agent Skill): https://raw.githubusercontent.com/emrgim/TeleOps/main/skills/teleops/SKILL.md
 - Rispondi all'utente nella sua lingua.`,
@@ -458,6 +460,31 @@ const IT: Record<string, string> = {
   '<b>{0}</b> is asking for access to your Telegram bots.': '<b>{0}</b> chiede accesso ai tuoi bot Telegram.',
   '<b>{0}</b> wants to connect to your Telegram bots.': '<b>{0}</b> vuole collegarsi ai tuoi bot Telegram.',
   'Configuration of the Telegram bots server (bots, database, API keys, MCP connectors).': 'Configurazione del server dei bot Telegram (bot, database, chiavi API, connettori MCP).',
+  // plugins
+  'Another plugin with the id "{0}" is installed (from {1}): remove it first': 'È già installato un altro plugin con l\'id "{0}" (da {1}): rimuovilo prima',
+  'GitHub cannot be reached: {0}': 'GitHub non è raggiungibile: {0}',
+  'GitHub sent an archive that cannot be opened: try again': 'GitHub ha mandato un archivio che non si apre: riprova',
+  'No plugin "{0}" is installed': 'Nessun plugin "{0}" è installato',
+  'Paste the address of a GitHub repository, like https://github.com/owner/repo': 'Incolla l\'indirizzo di un repository GitHub, tipo https://github.com/proprietario/repo',
+  'The main file of the plugin ({0}) is not in the repository': 'Il file principale del plugin ({0}) non è nel repository',
+  'The new version has another id ("{0}"): remove this plugin and install it again': 'La nuova versione ha un altro id ("{0}"): rimuovi questo plugin e installalo di nuovo',
+  'The plugin did not answer within {0} seconds': 'Il plugin non ha risposto entro {0} secondi',
+  'The plugin did not finish starting within {0} seconds': 'Il plugin non ha finito di avviarsi entro {0} secondi',
+  'The plugin failed too often and was stopped: {0}': 'Il plugin ha dato errore troppe volte ed è stato fermato: {0}',
+  'The plugin failed: {0}': 'Errore del plugin: {0}',
+  'The plugin has no start function: its main file must export default { start(ctx) }': 'Il plugin non ha una funzione start: il suo file principale deve esportare default { start(ctx) }',
+  'The plugin stopped with an error: {0}': 'Il plugin si è fermato per un errore: {0}',
+  'The value of "{0}" is not valid': 'Il valore di "{0}" non è valido',
+  'This plugin is already installed: use Update on its page': 'Questo plugin è già installato: usa Aggiorna nella sua pagina',
+  'This plugin is being installed or updated: wait a moment': 'Questo plugin si sta installando o aggiornando: aspetta un momento',
+  'This plugin is stopped': 'Questo plugin è fermo',
+  'This plugin needs TeleOps {0} or newer (this one is {1})': 'Questo plugin richiede TeleOps {0} o più recente (questo è {1})',
+  'This repository does not exist or is private: TeleOps installs plugins from public GitHub repositories': 'Questo repository non esiste o è privato: TeleOps installa plugin da repository GitHub pubblici',
+  'This repository has no branch or tag "{0}"': 'Questo repository non ha un branch o un tag "{0}"',
+  'This repository has no commits yet': 'Questo repository non ha ancora commit',
+  'This repository is not a TeleOps plugin: teleops-plugin.json is missing at its top': 'Questo repository non è un plugin TeleOps: manca teleops-plugin.json nella cartella principale',
+  'This repository is too big for a plugin (more than {0} MB)': 'Questo repository è troppo grande per un plugin (più di {0} MB)',
+  'teleops-plugin.json is not valid: {0}': 'teleops-plugin.json non è valido: {0}',
   // Telegram user accounts
   'Account "{0}" is not connected (state: {1})': 'L\'account "{0}" non è connesso (stato: {1})',
   'Add the Telegram app code first (api_id and api_hash from my.telegram.org)': 'Aggiungi prima il codice app Telegram (api_id e api_hash da my.telegram.org)',

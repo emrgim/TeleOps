@@ -117,7 +117,7 @@ export function registerRoutes(fastify: FastifyInstance, app: App): void {
   f.get('/static/app.css', { schema: { hide: true } }, sendFile('app.css', 'text/css; charset=utf-8', 60))
   f.get('/static/base.css', { schema: { hide: true } }, sendFile('base.css', 'text/css; charset=utf-8', 300))
   f.get('/static/theme.js', { schema: { hide: true } }, sendFile('theme.js', 'application/javascript; charset=utf-8', 300))
-  const LOGOS: Record<string, string> = { 'cursor.svg': 'image/svg+xml', 'claude.svg': 'image/svg+xml', 'chatgpt.svg': 'image/svg+xml', 'grok.svg': 'image/svg+xml', 'gemini.svg': 'image/svg+xml', 'mcp.svg': 'image/svg+xml', 'hermes.png': 'image/png', 'grokbot.png': 'image/png' }
+  const LOGOS: Record<string, string> = { 'cursor.svg': 'image/svg+xml', 'claude.svg': 'image/svg+xml', 'chatgpt.svg': 'image/svg+xml', 'grok.svg': 'image/svg+xml', 'gemini.svg': 'image/svg+xml', 'mcp.svg': 'image/svg+xml', 'hermes.png': 'image/png', 'grokbot.png': 'image/png', 'plugin.svg': 'image/svg+xml' }
   f.get('/static/logos/:name', { schema: { hide: true, params: z.object({ name: z.string() }) } }, async (req, reply) => {
     const type = LOGOS[req.params.name]
     if (!type) return reply.code(404).send()
@@ -341,12 +341,14 @@ export function registerRoutes(fastify: FastifyInstance, app: App): void {
       schema: {
         ...tags('Accounts'),
         summary: 'Set the Telegram app code (my.telegram.org → API development tools): every Telegram account logs in through it',
-        body: z.object({ apiId: z.union([z.number(), z.string()]), apiHash: z.string().min(1).max(64) }),
+        body: z.object({ apiId: z.union([z.number(), z.string()]), apiHash: z.string().max(64).optional() }),
       },
     },
     async (req) => {
-      if ((await telegramApp(app.h))?.source === 'env') throw new AppError('APP_FROM_ENV', 'The app code comes from TELEOPS_API_ID / TELEOPS_API_HASH: change it there', 409)
-      await setTelegramApp(app.h, req.body.apiId, req.body.apiHash)
+      const cur = await telegramApp(app.h)
+      if (cur?.source === 'env') throw new AppError('APP_FROM_ENV', 'The app code comes from TELEOPS_API_ID / TELEOPS_API_HASH: change it there', 409)
+      // an empty api_hash keeps the saved one (the page never shows it)
+      await setTelegramApp(app.h, req.body.apiId, req.body.apiHash?.trim() || cur?.apiHash)
       return appOut()
     },
   )
@@ -379,6 +381,126 @@ export function registerRoutes(fastify: FastifyInstance, app: App): void {
   f.delete('/v1/users/login/:id', { preHandler: guard('admin'), schema: { ...tags('Accounts'), summary: 'Stop a login', params: loginParam } }, async (req) => {
     await app.logins.cancel(req.params.id)
     return { ok: true }
+  })
+
+  // ------------------------------------------------------------------ plugins (Connectors → Plugins): public GitHub repositories
+  const pluginParam = z.object({ id: z.string().max(64) })
+  const repoBody = z.object({ url: z.string().min(3).max(500).describe('The GitHub repository: https://github.com/owner/repo (…/tree/<branch or tag> to follow one)') })
+  f.get('/v1/plugins', { preHandler: guard('admin'), schema: { ...tags('Plugins'), summary: 'Installed plugins' } }, async (req) => app.plugins.list(reqLang(req)))
+  f.post(
+    '/v1/plugins/preview',
+    { preHandler: guard('admin'), schema: { ...tags('Plugins'), summary: 'Read a plugin from its GitHub repository without installing it', body: repoBody } },
+    async (req) => app.plugins.preview(req.body.url, reqLang(req)),
+  )
+  f.post(
+    '/v1/plugins',
+    { preHandler: guard('admin'), schema: { ...tags('Plugins'), summary: 'Install a plugin from a public GitHub repository (pinned to its latest commit)', body: repoBody } },
+    async (req, reply) => reply.code(201).send(await app.plugins.install(req.body.url, reqLang(req))),
+  )
+  f.get('/v1/plugins/:id', { preHandler: guard('admin'), schema: { ...tags('Plugins'), summary: 'One plugin: state, settings, MCP tools, web addresses', params: pluginParam } }, async (req) =>
+    app.plugins.status(req.params.id, reqLang(req)),
+  )
+  f.patch(
+    '/v1/plugins/:id',
+    {
+      preHandler: guard('admin'),
+      schema: {
+        ...tags('Plugins'),
+        summary: 'Turn a plugin on or off, or save its settings (an empty secret keeps the saved one)',
+        params: pluginParam,
+        body: z.object({ enabled: z.boolean().optional(), settings: z.record(z.string(), z.unknown()).optional() }),
+      },
+    },
+    async (req) => {
+      const lang = reqLang(req)
+      if (req.body.settings) await app.plugins.setSettings(req.params.id, req.body.settings, lang)
+      if (req.body.enabled !== undefined) await app.plugins.setEnabled(req.params.id, req.body.enabled, lang)
+      return app.plugins.status(req.params.id, lang)
+    },
+  )
+  f.get('/v1/plugins/:id/update', { preHandler: guard('admin'), schema: { ...tags('Plugins'), summary: 'Is there a newer commit on the branch the plugin follows?', params: pluginParam } }, async (req) =>
+    app.plugins.check(req.params.id),
+  )
+  f.post('/v1/plugins/:id/update', { preHandler: guard('admin'), schema: { ...tags('Plugins'), summary: 'Update the plugin to the latest commit (settings and data stay)', params: pluginParam } }, async (req) =>
+    app.plugins.update(req.params.id, reqLang(req)),
+  )
+  f.post('/v1/plugins/:id/restart', { preHandler: guard('admin'), schema: { ...tags('Plugins'), summary: 'Restart the plugin', params: pluginParam } }, async (req) =>
+    app.plugins.restart(req.params.id, reqLang(req)),
+  )
+  f.delete('/v1/plugins/:id', { preHandler: guard('admin'), schema: { ...tags('Plugins'), summary: 'Remove the plugin with its settings and data', params: pluginParam } }, async (req) => {
+    await app.plugins.remove(req.params.id)
+    return { ok: true }
+  })
+  f.get('/v1/plugins/:id/icon', { preHandler: guard('admin'), schema: { hide: true, params: pluginParam } }, async (req, reply) => {
+    const i = app.plugins.icon(req.params.id)
+    // an icon from a repository never runs as a page of TeleOps
+    return reply
+      .type(i.type)
+      .header('cache-control', 'private, max-age=86400')
+      .header('content-security-policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox")
+      .header('x-content-type-options', 'nosniff')
+      .send(i.buf)
+  })
+
+  // web addresses added by plugins: /plugins/<id>/<path> (a plugin can check signatures: it gets rawBody too)
+  fastify.register(async (sub) => {
+    sub.removeAllContentTypeParsers()
+    sub.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'buffer' }, (req, body, done) => {
+      ;(req as FastifyRequest & { rawBody?: Buffer }).rawBody = body as Buffer
+      done(null, Object.fromEntries(new URLSearchParams((body as Buffer).toString('utf8'))))
+    })
+    sub.addContentTypeParser('application/json', { parseAs: 'buffer' }, (req, body, done) => {
+      ;(req as FastifyRequest & { rawBody?: Buffer }).rawBody = body as Buffer
+      if (!(body as Buffer).length) return done(null, undefined)
+      try {
+        done(null, JSON.parse((body as Buffer).toString('utf8')))
+      } catch {
+        const e = new Error('Body is not valid JSON') as Error & { statusCode: number }
+        e.statusCode = 400
+        done(e, undefined)
+      }
+    })
+    sub.addContentTypeParser('*', { parseAs: 'buffer' }, (req, body, done) => {
+      ;(req as FastifyRequest & { rawBody?: Buffer }).rawBody = body as Buffer
+      done(null, body)
+    })
+    const handler = async (req: FastifyRequest, reply: FastifyReply) => {
+        const params = req.params as Record<string, string>
+        const id = params.id
+        const subPath = params['*'] ?? ''
+        const method = req.method === 'HEAD' ? 'GET' : req.method
+        const { def, params: rp } = app.plugins.route(id, method, subPath)
+        if (def.auth !== 'none') {
+          const p = await authenticate(app, req)
+          if (!p) {
+            reply.header('www-authenticate', app.oauth.wwwAuthenticate(req, '/v1'))
+            throw new AppError('UNAUTHORIZED', 'Missing or invalid credentials (Bearer API key, OAuth token or admin session)', 401)
+          }
+          requireScope(p, def.auth)
+        }
+        const out = await app.plugins.runRoute(id, def, {
+          method: req.method,
+          path: subPath,
+          params: rp,
+          query: (req.query ?? {}) as Record<string, unknown>,
+          headers: req.headers as Record<string, unknown>,
+          body: req.body,
+          rawBody: (req as FastifyRequest & { rawBody?: Buffer }).rawBody ?? null,
+        })
+        reply.code(out.status)
+        for (const [k, v] of Object.entries(out.headers)) reply.header(k, v)
+        if (out.body === undefined) return reply.send()
+        if (Buffer.isBuffer(out.body) || out.body instanceof Uint8Array) {
+          if (!reply.hasHeader('content-type')) reply.type('application/octet-stream')
+          return reply.send(Buffer.from(out.body as Uint8Array))
+        }
+        if (typeof out.body === 'string') {
+          if (!reply.hasHeader('content-type')) reply.type('text/plain; charset=utf-8')
+          return reply.send(out.body)
+        }
+        return reply.send(out.body)
+    }
+    for (const url of ['/plugins/:id', '/plugins/:id/*']) sub.route({ method: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'], url, schema: { hide: true }, handler })
   })
 
   // ------------------------------------------------------------------ chats & messages

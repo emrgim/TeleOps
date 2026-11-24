@@ -254,3 +254,17 @@ td.nowrap{white-space:nowrap}
 #userDlg img.qr{display:block;width:240px;height:240px;margin:10px auto;background:#fff;padding:8px;image-rendering:pixelated}
 #userDlg .user-err{color:var(--danger);min-height:1.2em;margin:6px 0 0}
 #userDlg [data-pane][hidden],#profForm .bot-only[hidden]{display:none}
+
+/* plugins (Connectors → Plugins) */
+#pluginBar{gap:10px;align-items:center}
+.tile-state{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.tile-state.open{color:var(--ok)}.tile-state.warn{color:var(--warn)}.tile-state.bad{color:var(--danger)}
+.tiles.view-list .tile-state{margin-left:auto}
+.plug-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.plug-err{color:var(--danger);white-space:pre-wrap;word-break:break-word}
+.plug-warn{color:var(--warn)}
+.plug-list{margin:4px 0 10px;padding-left:18px}.plug-list li{margin:4px 0;word-break:break-word}
+.plug-prev{border:1px solid var(--border);padding:8px 12px;margin:10px 0}.plug-prev p{margin:4px 0}
+#plugDlg .user-err{color:var(--danger);min-height:1.2em;margin:6px 0 0}
+.form p.help{margin:4px 0 0}
+#tgAppState.ok{color:var(--ok)}#tgAppState.warn{color:var(--warn)}

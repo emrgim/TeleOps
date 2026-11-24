@@ -223,6 +223,21 @@ export const TABLES: TableDef[] = [
     pk: ['token_hash'],
     indexes: [['oauth_tokens_family', ['family']]],
   },
+  // plugins (Connectors → Plugins): a public GitHub repository pinned to one commit; settings = JSON of the form
+  {
+    name: 'plugins',
+    cols: [
+      ['id', 'id', 'notnull'], ['repo', 'name'], ['ref', 'name'], ['branch', 'name'], ['sha', 'id'], ['manifest', 'long'],
+      ['settings', 'long'], ['enabled', 'int'], ['error', 'url'], ['installed_at', 'big'], ['updated_at', 'big'],
+    ],
+    pk: ['id'],
+  },
+  // what each plugin keeps for itself (ctx.store), JSON values
+  {
+    name: 'plugin_data',
+    cols: [['plugin_id', 'id', 'notnull'], ['k', 'key', 'notnull'], ['v', 'long'], ['updated_at', 'big']],
+    pk: ['plugin_id', 'k'],
+  },
 ]
 
 const SCHEMA_VERSION = 1

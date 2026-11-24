@@ -15,6 +15,7 @@
 > - Buttons under a message: a press comes back as a [button] message in the chat and as the button.pressed event.
 > - Use telegram_bots to see the bots; pass "bot" (id or @username) to use one that is not the default.
 > - Telegram accounts of people (telegram_bots → kind user) use the same tools: they read the whole history of their chats from Telegram and write as that person, to anyone the app could; they cannot send buttons. Treat their chats as private.
+> - Tools named <plugin>_<tool> come from plugins the owner installed: their description says what they do.
 > - Voice messages (type voice, audio or video_note): read their transcript, or call telegram_transcribe_voice to know what was said.
 > - Every tool explained, with examples (Agent Skill): https://raw.githubusercontent.com/emrgim/TeleOps/main/skills/teleops/SKILL.md
 > - Reply to the user in their language.

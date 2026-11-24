@@ -62,9 +62,9 @@ $$('.viewsw').forEach((w) => {
 
 // ---------------------------------------------------------------- tabs
 // top tabs: bots · connectors (mcp / api / hooks) · settings (general / db / …)
-const SUBS = { connect: ['mcp', 'api', 'hooks'], settings: ['general', 'updates', 'db', 'log', 'voice', 'feedback', 'backup', 'license'] }
+const SUBS = { connect: ['plugins', 'mcp', 'api', 'hooks'], settings: ['general', 'updates', 'db', 'log', 'voice', 'feedback', 'backup', 'license'] }
 const LEGACY = { numbers: 'bots', keys: 'connect/api', hooks: 'connect/hooks', db: 'settings/db' }
-const lastSub = { connect: 'mcp', settings: 'general' }
+const lastSub = { connect: 'plugins', settings: 'general' }
 let routeItem = null // third part of the route: #connect/mcp/cursor
 $$('#tabs button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)))
 $$('.subnav button').forEach((b) => b.addEventListener('click', () => showTab(b.closest('.subnav').dataset.for, b.dataset.sub)))
@@ -384,6 +384,8 @@ const MCP_CLIENTS = [
 ]
 const clientName = (c) => (c.nameKey ? t(c.nameKey) : c.name)
 function logo(c, big = false) {
+  // a plugin with its own icon (from its repository)
+  if (c.icon) return `<img class="logo${big ? ' big' : ''}" src="${esc(c.icon)}" alt="${esc(clientName(c))}">`
   const u = `/static/logos/${c.logo}`
   return c.mono
     ? `<span class="logo mono${big ? ' big' : ''}" style="-webkit-mask-image:url(${u});mask-image:url(${u})" role="img" aria-label="${esc(clientName(c))}"></span>`
@@ -393,7 +395,7 @@ function tiles(list, sub) {
   return list.map((c) => `<button type="button" class="tile" data-tile="${esc(c.id)}" data-sub="${sub}">${logo(c)}<span class="tile-name">${esc(clientName(c))}</span><span class="chev" aria-hidden="true">›</span></button>`).join('')
 }
 function detailHead(c, sub) {
-  return `${sub ? `<div class="detail-head"><button type="button" class="ghost small" data-back="${sub}">← MCP</button></div>` : ''}
+  return `${sub ? `<div class="detail-head"><button type="button" class="ghost small" data-back="${sub}">← ${sub === 'mcp' ? 'MCP' : esc(t('sub.plugins'))}</button></div>` : ''}
     <div class="detail-title">${logo(c, true)}<h2>${esc(clientName(c))}</h2></div>`
 }
 function endpointLine() {
@@ -1028,6 +1030,7 @@ $('#bakUse').addEventListener('click', run(async () => {
 }))
 async function loadSettings() {
   loadSessions().catch(() => {})
+  loadTgApp().catch((e) => { $('#tgAppState').textContent = e.message })
   loadOwner().catch((e) => { $('#ownerState').textContent = e.message })
   const s = await api('GET', '/v1/admin/settings')
   const f = $('#setForm')
@@ -1066,8 +1069,195 @@ $('#pwClear').addEventListener('click', run(async () => { if (!confirm(t('confir
 $('#mkLink').addEventListener('click', run(async () => { const r = await api('POST', '/v1/admin/login-link'); $('#linkOut').hidden = false; $('#linkOut').innerHTML = `<code>${esc(r.url)}</code><button class="small" data-copy="${esc(r.url)}">${esc(t('copy'))}</button>` }))
 $('#restart').addEventListener('click', run(async () => { if (!confirm(t('confirm.restart'))) return; await api('POST', '/v1/admin/restart'); toast(t('svc.restarting')); setTimeout(() => location.reload(), 5000) }))
 
+// ---------------------------------------------------------------- plugins: public GitHub repositories (Connectors → Plugins)
+let PLUGINS = []
+let curPlugin = null
+const PSTATE_CLASS = { running: 'open', starting: 'warn', settings: 'warn', error: 'bad', stopped: '' }
+const pluginLogo = (p) => ({ id: p.id, name: p.name, icon: p.icon, logo: 'plugin.svg', mono: !p.icon })
+function pluginTiles(list) {
+  return list.map((p) => `<button type="button" class="tile" data-tile="${esc(p.id)}" data-sub="plugins">${logo(pluginLogo(p))}<span class="tile-name">${esc(p.name)}</span><span class="tile-state ${PSTATE_CLASS[p.state] ?? ''}">${esc(t('plugins.state.' + p.state))}</span><span class="chev" aria-hidden="true">›</span></button>`).join('')
+}
+async function loadPlugins() {
+  PLUGINS = await api('GET', '/v1/plugins')
+  const p = routeItem && PLUGINS.find((x) => x.id === routeItem)
+  for (const el of ['#pluginTiles', '#pluginBar', '#pluginIntro']) $(el).hidden = !!p
+  $('#pluginDetail').hidden = !p
+  curPlugin = p || null
+  if (p) {
+    if (!state.accounts?.length) await loadOverview().catch(() => {})
+    return renderPluginDetail(p)
+  }
+  $('#pluginTiles').innerHTML = PLUGINS.length ? pluginTiles(PLUGINS) : `<p class="muted">${esc(t('plugins.none'))}</p>`
+}
+function settingField(s) {
+  const name = esc(s.key)
+  const label = `<span>${esc(s.label)}${s.required ? ' *' : ''}</span>`
+  const help = s.help ? `<p class="muted small help">${esc(s.help)}</p>` : ''
+  const ph = esc(s.placeholder ?? (s.default !== null && s.default !== undefined && s.type !== 'boolean' ? String(s.default) : ''))
+  const val = esc(s.value ?? '')
+  const cur = String(s.value ?? s.default ?? '')
+  const pick = (opts) => `<select name="${name}"><option value="">${esc(t('plugins.choose'))}</option>${opts.map((o) => `<option value="${esc(o.value)}"${cur === o.value ? ' selected' : ''}>${esc(o.label)}</option>`).join('')}</select>`
+  switch (s.type) {
+    case 'boolean': return `<label class="inline"><input type="checkbox" name="${name}"${(s.value ?? s.default) ? ' checked' : ''}> ${label}</label>${help}`
+    case 'textarea': return `<label>${label} <textarea name="${name}" rows="4" placeholder="${ph}">${val}</textarea></label>${help}`
+    case 'secret': return `<label>${label} <input name="${name}" type="password" autocomplete="off" placeholder="${esc(s.set ? t('plugins.secretSet') : s.placeholder ?? '')}"></label>${help}`
+    case 'number': return `<label>${label} <input name="${name}" type="number" step="any" value="${val}" placeholder="${ph}"></label>${help}`
+    case 'url': return `<label>${label} <input name="${name}" type="url" value="${val}" placeholder="${ph || 'https://'}"></label>${help}`
+    case 'select': return `<label>${label} ${pick(s.options ?? [])}</label>${help}`
+    case 'account': return `<label>${label} ${pick(state.accounts.map((a) => ({ value: a.id, label: `${a.name}${a.username ? ' @' + a.username : ''} · ${a.kind === 'user' ? t('acc.kindUser') : t('acc.kindBot')}` })))}</label>${help}`
+    default: return `<label>${label} <input name="${name}" value="${val}" placeholder="${ph}"></label>${help}`
+  }
+}
+function pluginAdds(p) {
+  const tools = p.tools.length ? `<p class="muted small">${esc(t('plugins.tools'))}</p><ul class="plug-list">${p.tools.map((x) => `<li><code>${esc(x.name)}</code> — ${esc(x.description)}</li>`).join('')}</ul>` : ''
+  const routes = p.routes.length ? `<p class="muted small">${esc(t('plugins.routes'))}</p><ul class="plug-list">${p.routes.map((r) => `<li><code>${esc(r.method)}</code> <code>${esc(r.url)}</code> <button type="button" class="ghost small" data-copy="${esc(r.url)}">${esc(t('copy'))}</button>${r.auth === 'none' ? ` <span class="muted small">${esc(t('plugins.public'))}</span>` : ''}</li>`).join('')}</ul>` : ''
+  if (tools || routes) return tools + routes
+  return `<p class="muted">${esc(p.state === 'running' ? t('plugins.nothingAdded') : t('plugins.notRunning'))}</p>`
+}
+function renderPluginDetail(p) {
+  curPlugin = p
+  const i = PLUGINS.findIndex((x) => x.id === p.id)
+  if (i >= 0) PLUGINS[i] = p
+  const meta = [
+    p.version ? 'v' + esc(p.version) : '',
+    p.author ? esc(t('plugins.by', p.author)) : '',
+    `<a href="${esc(p.repoUrl)}" target="_blank" rel="noopener">${esc(p.repo)}</a>`,
+    `${esc(t('plugins.commit'))} <a href="${esc(p.commitUrl)}" target="_blank" rel="noopener"><code>${esc(p.sha.slice(0, 7))}</code></a>${p.branch ? ` (${esc(p.branch)})` : ''}`,
+  ].filter(Boolean).join(' · ')
+  $('#pluginDetail').innerHTML = `${detailHead(pluginLogo(p), 'plugins')}
+    <div class="card">
+      <div class="plug-top"><span class="badge ${PSTATE_CLASS[p.state] ?? ''}">${esc(t('plugins.state.' + p.state))}</span><span class="muted small">${meta}</span></div>
+      ${p.description ? `<p>${esc(p.description)}</p>` : ''}
+      ${p.error ? `<p class="plug-err">${esc(p.error)}</p>` : ''}
+      ${p.state === 'settings' ? `<p class="plug-warn small">${esc(t('plugins.needSettings'))}</p>` : ''}
+      <div class="actions">
+        <button class="small" data-pact="${p.enabled ? 'off' : 'on'}">${esc(t(p.enabled ? 'plugins.disable' : 'plugins.enable'))}</button>
+        ${p.enabled ? `<button class="small ghost" data-pact="restart">${esc(t('plugins.restart'))}</button>` : ''}
+        <button class="small ghost" data-pact="check">${esc(t('plugins.update'))}</button><span id="plugUpd" class="muted small"></span>
+        <button class="small ghost danger" data-pact="remove">${esc(t('plugins.remove'))}</button>
+      </div>
+    </div>
+    ${p.settings.length ? `<form class="card form" id="plugSettings" autocomplete="off"><h3>${esc(t('plugins.settings'))}</h3>${p.settings.map(settingField).join('')}<button type="submit">${esc(t('save'))}</button></form>` : ''}
+    <div class="card"><h3>${esc(t('plugins.adds'))}</h3>${pluginAdds(p)}</div>`
+  $('#plugSettings')?.addEventListener('submit', run(async (e) => {
+    e.preventDefault()
+    const f = e.target
+    const body = {}
+    for (const s of curPlugin.settings) {
+      const el = f.elements[s.key]
+      if (!el) continue
+      if (s.type === 'boolean') body[s.key] = el.checked
+      else if (s.type === 'secret') { if (el.value) body[s.key] = el.value }
+      else body[s.key] = el.value
+    }
+    renderPluginDetail(await api('PATCH', `/v1/plugins/${encodeURIComponent(curPlugin.id)}`, { settings: body }))
+    toast(t('plugins.saved'))
+  }))
+}
+document.addEventListener('click', run(async (e) => {
+  const b = e.target.closest('[data-pact]')
+  if (!b || !curPlugin) return
+  const id = encodeURIComponent(curPlugin.id)
+  b.disabled = true
+  try {
+    switch (b.dataset.pact) {
+      case 'on':
+      case 'off':
+        renderPluginDetail(await api('PATCH', `/v1/plugins/${id}`, { enabled: b.dataset.pact === 'on' }))
+        break
+      case 'restart':
+        renderPluginDetail(await api('POST', `/v1/plugins/${id}/restart`))
+        toast(t('plugins.restarted'))
+        break
+      case 'check': {
+        const c = await api('GET', `/v1/plugins/${id}/update`)
+        $('#plugUpd').innerHTML = c.available ? `<button class="small" data-pact="update">${esc(t('plugins.updateTo', c.latest.slice(0, 7)))}</button>` : esc(c.pinned ? t('plugins.pinned') : t('plugins.upToDate'))
+        break
+      }
+      case 'update': {
+        const p = await api('POST', `/v1/plugins/${id}/update`)
+        renderPluginDetail(p)
+        toast(t('plugins.updated', p.sha.slice(0, 7)))
+        break
+      }
+      case 'remove':
+        if (!confirm(t('confirm.removePlugin', curPlugin.name))) break
+        await api('DELETE', `/v1/plugins/${id}`)
+        toast(t('plugins.removed'))
+        showTab('connect', 'plugins')
+        break
+    }
+  } finally { b.disabled = false }
+}))
+// + : paste the address of the plugin's GitHub repository, check what it is, install
+function plugPreviewHtml(p) {
+  return `<div class="plug-prev">
+    <p><b>${esc(p.name)}</b>${p.version ? ` <span class="muted small">v${esc(p.version)}</span>` : ''}${p.author ? ` <span class="muted small">${esc(t('plugins.by', p.author))}</span>` : ''}</p>
+    ${p.description ? `<p class="small">${esc(p.description)}</p>` : ''}
+    <p class="muted small"><a href="${esc(p.repoUrl)}" target="_blank" rel="noopener">${esc(p.repo)}</a> · ${esc(t('plugins.commit'))} <a href="${esc(p.commitUrl)}" target="_blank" rel="noopener"><code>${esc(p.sha.slice(0, 7))}</code></a>${p.branch ? ` (${esc(p.branch)})` : ''} · ${esc(t('plugins.files', p.files))}</p>
+    ${p.settings.length ? `<p class="muted small">${esc(t('plugins.asks'))} ${p.settings.map((s) => esc(s.label)).join(', ')}</p>` : ''}
+    ${p.installed ? `<p class="small">${esc(t('plugins.alreadyInstalled'))}</p>` : p.conflict ? `<p class="plug-err small">${esc(t('plugins.conflict', p.id, p.conflict))}</p>` : `<p class="plug-warn small">⚠ ${esc(t('plugins.warn'))}</p>`}
+  </div>`
+}
+const plugStep = (fn) => async () => {
+  $('#plugErr').textContent = ''
+  try { await fn() } catch (e) { $('#plugErr').textContent = e.message }
+}
+$('#addPlugin').addEventListener('click', () => {
+  $('#plugForm').reset()
+  $('#plugPreview').innerHTML = ''
+  $('#plugErr').textContent = ''
+  $('#plugInstall').hidden = true
+  $('#plugDlg').showModal()
+  $('#plugForm').url.focus()
+})
+$('#plugForm').url.addEventListener('input', () => { $('#plugInstall').hidden = true; $('#plugPreview').innerHTML = '' })
+$('#plugCheck').addEventListener('click', plugStep(async () => {
+  const url = $('#plugForm').url.value.trim()
+  if (!url) return
+  $('#plugCheck').disabled = true
+  let p
+  try { p = await api('POST', '/v1/plugins/preview', { url }) } finally { $('#plugCheck').disabled = false }
+  $('#plugPreview').innerHTML = plugPreviewHtml(p)
+  $('#plugInstall').hidden = !!(p.installed || p.conflict)
+}))
+$('#plugInstall').addEventListener('click', plugStep(async () => {
+  $('#plugInstall').disabled = true
+  let p
+  try { p = await api('POST', '/v1/plugins', { url: $('#plugForm').url.value.trim() }) } finally { $('#plugInstall').disabled = false }
+  $('#plugDlg').close('cancel')
+  toast(t('plugins.installedToast', p.name))
+  showTab('connect', 'plugins', p.id)
+}))
+// Enter checks first, then installs
+$('#plugForm').addEventListener('submit', (e) => {
+  if (e.submitter?.value === 'cancel') return
+  e.preventDefault()
+  ;($('#plugInstall').hidden ? $('#plugCheck') : $('#plugInstall')).click()
+})
+
+// ---------------------------------------------------------------- the Telegram app (Settings → General): needed by Telegram accounts
+async function loadTgApp() {
+  const a = await api('GET', '/v1/users/app')
+  const st = $('#tgAppState')
+  st.textContent = a.configured ? (a.fromEnv ? t('tgapp.fromEnv', a.apiId) : t('tgapp.set', a.apiId)) : t('tgapp.notSet')
+  st.className = 'small ' + (a.configured ? 'ok' : 'warn')
+  const f = $('#tgAppForm')
+  $('#tgAppFields').hidden = !!a.fromEnv
+  f.apiId.value = a.apiId ?? ''
+  f.apiHash.value = ''
+  f.apiHash.placeholder = a.configured ? t('tgapp.hashKeep') : ''
+}
+$('#tgAppForm').addEventListener('submit', run(async (e) => {
+  e.preventDefault()
+  const f = e.target
+  await api('PUT', '/v1/users/app', { apiId: f.apiId.value.trim(), apiHash: f.apiHash.value.trim() })
+  toast(t('tgapp.saved'))
+  await loadTgApp()
+}))
+
 // ---------------------------------------------------------------- boot
-const loaders = { bots: loadOverview, 'connect/mcp': loadConnect, 'connect/api': loadApi, 'connect/hooks': loadHooks, 'settings/general': loadSettings, 'settings/db': loadDb, 'settings/log': loadLogs, 'settings/voice': () => loadVoice().catch((e) => { $('#voiceTestOut').textContent = e.message }), 'settings/updates': loadUpdates, 'settings/feedback': loadFeedback, 'settings/backup': loadBackup, 'settings/license': loadLicense }
+const loaders = { bots: loadOverview, 'connect/plugins': () => loadPlugins().catch((e) => toast(e.message, true)), 'connect/mcp': loadConnect, 'connect/api': loadApi, 'connect/hooks': loadHooks, 'settings/general': loadSettings, 'settings/db': loadDb, 'settings/log': loadLogs, 'settings/voice': () => loadVoice().catch((e) => { $('#voiceTestOut').textContent = e.message }), 'settings/updates': loadUpdates, 'settings/feedback': loadFeedback, 'settings/backup': loadBackup, 'settings/license': loadLicense }
 ;(async () => {
   try { await loadOverview() } catch (e) { toast(e.message, true) }
   startEvents()

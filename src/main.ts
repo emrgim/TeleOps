@@ -30,6 +30,7 @@ import { BackupService } from './backup.js'
 import { OwnerLink } from './owner.js'
 import { telegramApp } from './tg/user/app.js'
 import { UserLogins } from './tg/user/login.js'
+import { PluginManager } from './plugins/manager.js'
 
 // Slow or IPv4-only links: Node gives each address 250 ms to connect before giving up on it, so a
 // server that answers in a few seconds over IPv6 trouble is never reached ("fetch failed").
@@ -37,8 +38,15 @@ import { UserLogins } from './tg/user/login.js'
 dns.setDefaultResultOrder('ipv4first')
 net.setDefaultAutoSelectFamilyAttemptTimeout(10_000)
 
+/** The plugins, once started (an error thrown by plugin code stops that plugin, not TeleOps). */
+let pluginsRef: PluginManager | null = null
+
 // a crash is written to disk first (Settings → Feedback offers to send it), then systemd/launchd restarts us
 process.on('uncaughtException', (e, origin) => {
+  if (pluginsRef?.contain(e)) {
+    logger.error({ err: String((e as Error)?.stack ?? e) }, 'plugin error: that plugin was stopped')
+    return
+  }
   recordCrashSync(e, origin)
   logger.fatal({ err: String((e as Error)?.stack ?? e) }, 'crash: uncaught exception')
   setTimeout(() => process.exit(1), 200)
@@ -101,6 +109,16 @@ async function main() {
   // `/start <token>` from the config page links the owner's Telegram (login codes go there)
   ctx.onStart = (acc, m, param) => owner.onStart(acc, m, param)
   const svc = new TgService(h, accounts, settings)
+  // Connectors → Plugins: code from public GitHub repositories, pinned to a commit
+  const plugins = new PluginManager({
+    h,
+    bus,
+    accounts,
+    svc,
+    origin: () => settings.get().publicUrl || `http://${config.host === '0.0.0.0' || config.host === '::' ? '127.0.0.1' : config.host}:${config.port}`,
+    language: () => settings.get().language,
+  })
+  pluginsRef = plugins
   const apiKeys = new ApiKeys(h)
   const oauth = new OAuthServer(h, settings, admin)
   const webhooks = new WebhookDispatcher(h, bus)
@@ -164,6 +182,7 @@ async function main() {
     t.unref()
     try {
       voice.stop()
+      await plugins.stopAll()
       await logins.stopAll()
       await accounts.stopAll()
       await fastify.close()
@@ -200,6 +219,7 @@ async function main() {
     backup,
     owner,
     logins,
+    plugins,
     // systemd (Restart=always) brings us back with the new configuration
     restart: (reason) => setTimeout(() => void shutdown(0, `restart: ${reason}`), 400).unref(),
   }
@@ -233,6 +253,7 @@ async function main() {
   logger.info({ host: config.host, port: config.port }, 'listening')
 
   await accounts.loadAll()
+  await plugins.loadAll().catch((e) => logger.error({ err: String((e as Error)?.stack ?? e) }, 'plugins failed to load'))
   updater.start()
 
   setInterval(() => {
@@ -242,7 +263,10 @@ async function main() {
 
   process.on('SIGTERM', () => void shutdown(0, 'SIGTERM'))
   process.on('SIGINT', () => void shutdown(0, 'SIGINT'))
-  process.on('unhandledRejection', (e) => logger.error({ err: String((e as Error)?.stack ?? e) }, 'unhandled rejection'))
+  process.on('unhandledRejection', (e) => {
+    if (plugins.rejected(e)) return
+    logger.error({ err: String((e as Error)?.stack ?? e) }, 'unhandled rejection')
+  })
 }
 
 main().catch((e) => {
