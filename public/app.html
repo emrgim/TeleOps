@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TeleOps</title>
+<link rel="icon" href="/favicon.svg?v=1" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico?v=1" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=1">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#121212">
+<meta name="application-name" content="TeleOps">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="TeleOps">
+<link id="omTheme" rel="stylesheet" href="/theme.css?v=1">
+<link rel="stylesheet" href="/static/base.css?v=1">
+<link rel="stylesheet" href="/static/app.css?v=1">
+<script src="/static/theme.js?v=1" defer></script>
+<script src="/static/i18n.js?v=1"></script>
+</head>
+<body>
+<header>
+  <div class="brand"><img src="/favicon.svg?v=1" alt=""><div><b>TeleOps</b><span id="host" class="muted"></span></div></div>
+  <nav id="tabs">
+    <button data-tab="bots" class="on" data-i18n="nav.bots"></button>
+    <button data-tab="connect" data-i18n="nav.connect"></button>
+    <button data-tab="settings" data-i18n="nav.settings"></button>
+  </nav>
+  <button id="logout" class="ghost small" data-i18n="logout"></button>
+  <div class="subbar"><div class="subnav" data-for="connect" hidden><button data-sub="mcp" class="on">MCP</button><button data-sub="api">API</button><button data-sub="hooks" data-i18n="nav.hooks"></button></div><div class="subnav" data-for="settings" hidden><button data-sub="general" class="on" data-i18n="sub.general"></button><button data-sub="updates" data-i18n="sub.updates"></button><button data-sub="db" data-i18n="nav.db"></button><button data-sub="log" data-i18n="nav.log"></button><button data-sub="voice" data-i18n="sub.voice"></button><button data-sub="feedback" data-i18n="nav.feedback"></button><button data-sub="backup" data-i18n="sub.backup"></button><button data-sub="license" data-i18n="nav.license" hidden></button></div></div>
+</header>
+<main>
+  <section id="bots" class="tab on">
+    <div class="head"><h2 data-i18n="bots.title"></h2><div class="head-actions"><div class="viewsw" role="group" data-view-for="accounts"><button type="button" data-view="grid" data-i18n-title="view.grid"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="1" y="1" width="6" height="6"/><rect x="9" y="1" width="6" height="6"/><rect x="1" y="9" width="6" height="6"/><rect x="9" y="9" width="6" height="6"/></svg></button><button type="button" data-view="list" data-i18n-title="view.list"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="1" y="2" width="14" height="2.4"/><rect x="1" y="6.8" width="14" height="2.4"/><rect x="1" y="11.6" width="14" height="2.4"/></svg></button></div><button id="addBot" data-i18n="bots.add"></button></div></div>
+    <div id="accounts" class="grid"></div>
+  </section>
+
+  <section id="connect" class="tab">
+    <div class="sub on" id="connect-mcp">
+      <div class="listbar" id="mcpBar"><div class="viewsw" role="group" data-view-for="mcpTiles"><button type="button" data-view="grid" data-i18n-title="view.grid"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="1" y="1" width="6" height="6"/><rect x="9" y="1" width="6" height="6"/><rect x="1" y="9" width="6" height="6"/><rect x="9" y="9" width="6" height="6"/></svg></button><button type="button" data-view="list" data-i18n-title="view.list"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="1" y="2" width="14" height="2.4"/><rect x="1" y="6.8" width="14" height="2.4"/><rect x="1" y="11.6" width="14" height="2.4"/></svg></button></div></div>
+      <div class="tiles" id="mcpTiles"></div>
+      <div id="mcpDetail" hidden></div>
+    </div>
+    <div class="sub" id="connect-api">
+    <p class="muted"><span data-i18n="api.base"></span> <code id="apiBase"></code> <button class="ghost small" data-copy-el="apiBase" data-i18n="copy"></button></p>
+    <h3 data-i18n="keys.title"></h3>
+    <p class="muted" data-i18n-html="keys.hint"></p>
+    <form id="keyForm" class="card form">
+      <label><span data-i18n="keys.name"></span> <input name="name" required data-i18n-ph="keys.namePh"></label>
+      <div class="checks"><label><input type="checkbox" name="read" checked> <span data-i18n="keys.read"></span></label><label><input type="checkbox" name="send" checked> <span data-i18n="keys.send"></span></label><label><input type="checkbox" name="admin"> <span data-i18n="keys.admin"></span></label></div>
+      <label><span data-i18n="keys.bots"></span> <select name="bots" multiple size="3"></select><span class="muted" data-i18n="keys.botsHint"></span></label>
+      <button type="submit" data-i18n="keys.create"></button>
+    </form>
+    <div id="newKey" class="card reveal" hidden></div>
+    <div id="keyList"></div>
+    <div class="head vhead"><h3 data-i18n="api.vocab"></h3><span><span id="apiCount" class="muted small"></span> <a href="/docs" target="_blank" rel="noopener" class="small" data-i18n="api.full"></a></span></div>
+    <input id="apiFilter" type="search" data-i18n-ph="api.filter">
+    <div id="apiVocab" class="grid two vocab"></div>
+    </div>
+    <div class="sub" id="connect-hooks">
+    <p class="muted"><span data-i18n="hooks.hint"></span> <code>X-TeleOps-Signature: sha256=HMAC(secret, X-TeleOps-Timestamp + "." + body)</code></p>
+    <form id="hookForm" class="card form">
+      <label><span data-i18n="hooks.url"></span> <input name="url" type="url" required placeholder="https://n8n.example.com/webhook/…"></label>
+      <div class="row"><label><span data-i18n="hooks.events"></span> <input name="events" value="message.received"></label><label><span data-i18n="hooks.bot"></span> <select name="bot"></select></label></div>
+      <span class="muted" data-i18n="hooks.eventsHint"></span>
+      <label><span data-i18n="hooks.auth"></span> <input name="auth" type="password" autocomplete="new-password" spellcheck="false" data-i18n-ph="hooks.authPh"></label>
+      <p class="muted small" data-i18n="hooks.authHint"></p>
+      <button type="submit" data-i18n="hooks.add"></button>
+    </form>
+    <div id="newHook" class="card reveal" hidden></div>
+    <div id="hookList"></div>
+    <h3 data-i18n="hooks.deliveries"></h3>
+    <div id="deliveries"></div>
+    </div>
+  </section>
+
+  <section id="settings" class="tab">
+    <div class="sub on" id="settings-general">
+    <div class="card form" id="appearCard">
+      <h3 data-i18n="appear.title"></h3>
+      <div class="seg" role="radiogroup">
+        <label><input type="radio" name="appearance" value="light"><span data-i18n="appear.light"></span></label>
+        <label><input type="radio" name="appearance" value="dark"><span data-i18n="appear.dark"></span></label>
+        <label><input type="radio" name="appearance" value="system"><span data-i18n="appear.system"></span></label>
+      </div>
+      <p class="muted small" id="appearInfo"></p>
+    </div>
+    <form id="setForm" class="card form">
+      <div class="row"><label><span data-i18n="set.rate"></span> <input name="ratePerMin" type="number" min="1"></label><label><span data-i18n="set.gap"></span> <input name="perChatGapMs" type="number" min="0"></label></div>
+      <label><span data-i18n="set.allow"></span> <input name="sendAllowlist" data-i18n-ph="set.allowPh"></label>
+      <label class="inline"><input type="checkbox" name="otpEnabled"> <span data-i18n="set.otp"></span></label>
+      <div class="row"><label><span data-i18n="set.ttl"></span> <input name="oauthAccessTtl" type="number" min="300"></label><label><span data-i18n="set.refresh"></span> <input name="oauthRefreshDays" type="number" min="1"></label></div>
+      <div class="row"><label><span data-i18n="set.publicUrl"></span> <input name="publicUrl" placeholder="https://teleops.example.com"></label><label class="narrow"><span data-i18n="set.maxMedia"></span> <input name="maxMediaMb" type="number" min="1"></label></div>
+      <button type="submit" data-i18n="save"></button>
+    </form>
+    <div class="card form" id="ownerCard">
+      <h3 data-i18n="owner.title"></h3>
+      <p class="muted small" data-i18n="owner.hint"></p>
+      <p id="ownerState"></p>
+      <div class="row"><button type="button" id="ownerLink" data-i18n="owner.link"></button><button type="button" id="ownerUnlink" class="ghost danger" data-i18n="owner.unlink" hidden></button></div>
+      <div id="ownerOut" class="reveal" hidden></div>
+    </div>
+    <form id="pwForm" class="card form">
+      <h3 data-i18n="pw.title"></h3>
+      <p class="muted" id="pwState"></p>
+      <label><span data-i18n="pw.new"></span> <input name="password" type="password" minlength="10" autocomplete="new-password"></label>
+      <div class="row"><button type="submit" data-i18n="pw.save"></button><button type="button" id="pwClear" class="ghost" data-i18n="pw.clear"></button></div>
+    </form>
+    <div class="card form"><h3 data-i18n="link.title"></h3><p class="muted" data-i18n="link.hint"></p><button id="mkLink" class="ghost" data-i18n="link.make"></button><div id="linkOut" class="reveal" hidden></div>
+    <h3 data-i18n="svc.title"></h3><p class="muted" id="svcInfo"></p><button id="restart" class="ghost" data-i18n="svc.restart"></button></div>
+    <div class="card"><h3 data-i18n="connect.sessions"></h3><div id="sessions"></div></div>
+    </div>
+    <div class="sub" id="settings-log">
+      <div class="term live" id="term">
+        <div class="term-bar">
+          <span class="term-title">teleops:~$ tail -f teleops.log</span>
+          <select id="logLevel"><option value="all" data-i18n="log.all"></option><option value="info" data-i18n="log.info"></option><option value="warn" data-i18n="log.warn"></option><option value="error" data-i18n="log.error"></option></select>
+          <input id="logQ" type="search" data-i18n-ph="log.search" spellcheck="false">
+          <button type="button" id="logLive" class="term-btn on"><span class="dot">●</span> <span data-i18n="log.live"></span></button>
+          <button type="button" id="logClear" class="term-btn" data-i18n="log.clear"></button>
+          <a id="logDl" class="term-btn" href="/v1/admin/logs/download" data-i18n="log.download"></a>
+        </div>
+        <div id="logList" class="term-body" tabindex="0"></div>
+        <div class="term-status"><span id="logCount"></span><button type="button" id="logJump" hidden></button></div>
+      </div>
+    </div>
+    <div class="sub" id="settings-updates">
+      <div class="card form">
+        <h3 data-i18n="upd.title"></h3>
+        <p><span class="muted" data-i18n="upd.current"></span> <b id="updCur"></b></p>
+        <p><span class="muted" data-i18n="upd.latest"></span> <b id="updLatest"></b></p>
+        <p id="updState"></p>
+        <label class="inline"><input type="checkbox" id="updAuto"> <span data-i18n="upd.auto"></span></label>
+        <p class="muted small" id="updHint"></p>
+        <div class="row"><button type="button" id="updCheck" class="ghost" data-i18n="upd.check"></button><button type="button" id="updApply" data-i18n="upd.apply" hidden></button></div>
+        <div id="updNotes" hidden><h3 data-i18n="upd.notes"></h3><pre id="updNotesText"></pre></div>
+      </div>
+    </div>
+    <div class="sub" id="settings-voice">
+    <form id="voiceForm" class="card form">
+      <h3 data-i18n="voice.title"></h3>
+      <p class="muted small" data-i18n="voice.hint"></p>
+      <div class="seg" role="radiogroup" id="voiceEngines">
+        <label><input type="radio" name="engine" value="off"><span data-i18n="voice.e.off"></span></label>
+        <label><input type="radio" name="engine" value="local"><span data-i18n="voice.e.local"></span></label>
+        <label><input type="radio" name="engine" value="api"><span data-i18n="voice.e.api"></span></label>
+        <label><input type="radio" name="engine" value="command"><span data-i18n="voice.e.command"></span></label>
+      </div>
+      <p class="muted small" id="voiceEngineHint"></p>
+      <div data-voice="local"><label><span data-i18n="voice.model"></span> <select name="model"></select></label><p class="small" id="voiceLocal"></p><div class="row" id="voiceInstallRow" hidden><button type="button" id="voiceInstall" data-i18n="voice.install"></button></div></div>
+      <div data-voice="api">
+        <div class="row"><label><span data-i18n="voice.provider"></span> <select name="provider"><option value="xai">xAI</option><option value="openai">OpenAI</option><option value="groq">Groq</option><option value="custom" data-i18n="voice.custom"></option></select></label><label><span data-i18n="voice.apiModel"></span> <input name="apiModel" spellcheck="false"></label></div>
+        <label><span data-i18n="voice.apiUrl"></span> <input name="apiUrl" spellcheck="false"></label>
+        <label><span data-i18n="voice.apiKey"></span> <input name="apiKey" type="password" autocomplete="new-password" spellcheck="false"></label>
+        <p class="muted small" data-i18n="voice.apiHint"></p>
+      </div>
+      <div data-voice="command"><label><span data-i18n="voice.command"></span> <input name="command" spellcheck="false" placeholder="whisper-cli -m /path/model.bin -nt -f {file}"></label><p class="muted small" data-i18n="voice.commandHint"></p></div>
+      <div data-voice="on">
+        <label><span data-i18n="voice.lang"></span> <select name="language"><option value="auto" data-i18n="voice.langAuto"></option><option value="it">Italiano</option><option value="en">English</option><option value="es">Español</option><option value="fr">Français</option><option value="de">Deutsch</option><option value="pt">Português</option><option value="nl">Nederlands</option><option value="ar">العربية</option></select></label>
+        <span class="lbl" data-i18n="voice.which"></span>
+        <div class="seg" role="radiogroup">
+          <label><input type="radio" name="autoMode" value="all"><span data-i18n="voice.whichAll"></span></label>
+          <label><input type="radio" name="autoMode" value="asked"><span data-i18n="voice.whichAsked"></span></label>
+        </div>
+        <p class="muted small" id="voiceWhichHint"></p>
+      </div>
+      <div class="row"><button type="submit" data-i18n="save"></button><button type="button" class="ghost" id="voiceTest" data-i18n="voice.test"></button></div>
+      <p class="small" id="voiceTestOut"></p>
+    </form>
+    </div>
+    <div class="sub" id="settings-feedback">
+      <form id="fbForm" class="card form">
+        <h3 data-i18n="fb.title"></h3>
+        <p class="muted small" id="fbHint"></p>
+        <div class="seg" role="radiogroup">
+          <label><input type="radio" name="kind" value="bug" checked><span data-i18n="fb.bug"></span></label>
+          <label><input type="radio" name="kind" value="idea"><span data-i18n="fb.idea"></span></label>
+          <label><input type="radio" name="kind" value="other"><span data-i18n="fb.other"></span></label>
+        </div>
+        <label><span data-i18n="fb.subject"></span> <input name="title" minlength="3" maxlength="120" required></label>
+        <label><span data-i18n="fb.message"></span> <textarea name="message" rows="6" minlength="5" maxlength="8000" required></textarea></label>
+        <label class="inline"><input type="checkbox" name="diagnostics" checked> <span data-i18n="fb.diag"></span></label>
+        <button type="submit" data-i18n="fb.send"></button>
+      </form>
+      <div class="card form">
+        <h3 data-i18n="rep.title"></h3>
+        <p class="muted small" data-i18n="rep.hint"></p>
+        <div class="seg" role="radiogroup">
+          <label><input type="radio" name="crashReports" value="ask"><span data-i18n="rep.ask"></span></label>
+          <label><input type="radio" name="crashReports" value="auto"><span data-i18n="rep.auto"></span></label>
+          <label><input type="radio" name="crashReports" value="off"><span data-i18n="rep.off"></span></label>
+        </div>
+        <div id="repList"></div>
+      </div>
+      <div class="card">
+        <h3 data-i18n="fb.sent"></h3>
+        <div id="fbSent"></div>
+        <p class="muted small"><span data-i18n="fb.install"></span> <code id="fbCode"></code></p>
+      </div>
+    </div>
+    <div class="sub" id="settings-backup">
+    <form id="bakForm" class="card form">
+      <h3 data-i18n="bak.title"></h3>
+      <p class="muted small" data-i18n="bak.hint"></p>
+      <div class="row"><button type="button" id="bakDownload" data-i18n="bak.download"></button><button type="button" class="ghost" id="bakNow" data-i18n="bak.now"></button></div>
+      <p class="small" id="bakStatus"></p>
+      <span class="lbl" data-i18n="bak.every"></span>
+      <div class="seg" role="radiogroup">
+        <label><input type="radio" name="every" value="off"><span data-i18n="bak.e.off"></span></label>
+        <label><input type="radio" name="every" value="hour"><span data-i18n="bak.e.hour"></span></label>
+        <label><input type="radio" name="every" value="day"><span data-i18n="bak.e.day"></span></label>
+        <label><input type="radio" name="every" value="week"><span data-i18n="bak.e.week"></span></label>
+      </div>
+      <span class="lbl" data-i18n="bak.folder"></span>
+      <div class="folder-row"><input name="folder" spellcheck="false" autocomplete="off"><button type="button" class="ghost" id="bakBrowse" data-i18n="bak.browse"></button></div>
+      <div id="bakPicker" class="picker" hidden>
+        <div class="picker-head"><button type="button" class="ghost small" id="bakUp" data-i18n="bak.up"></button><code id="bakPath"></code></div>
+        <div class="picker-roots" id="bakRoots"></div>
+        <ul class="picker-list" id="bakDirs"></ul>
+        <div class="folder-row"><input id="bakNewName" spellcheck="false" autocomplete="off"><button type="button" class="ghost" id="bakMkdir" data-i18n="bak.mkdir"></button><button type="button" id="bakUse" data-i18n="bak.use"></button></div>
+      </div>
+      <p class="muted small" id="bakFolderHint"></p>
+      <label class="narrow"><span data-i18n="bak.keep"></span> <input name="keep" type="number" min="1" max="1000"></label>
+      <label><span data-i18n="bak.password"></span> <input name="password" type="password" autocomplete="new-password" spellcheck="false"></label>
+      <p class="muted small" id="bakPwHint"></p>
+      <div class="row"><button type="submit" data-i18n="save"></button><button type="button" class="ghost" id="bakPwRemove" data-i18n="bak.pwRemove" hidden></button></div>
+      <span class="lbl" data-i18n="bak.files"></span>
+      <div id="bakFiles"></div>
+      <span class="lbl" data-i18n="bak.restore"></span>
+      <p class="muted small" data-i18n="bak.restoreHint"></p>
+      <div class="folder-row"><input type="file" id="bakFile" accept=".teleops"><input type="password" id="bakFilePw" autocomplete="off"><button type="button" class="danger" id="bakRestore" data-i18n="bak.restoreBtn"></button></div>
+      <p class="small" id="bakOut"></p>
+    </form>
+    </div>
+    <div class="sub" id="settings-license">
+      <form id="licForm" class="card form">
+        <h3 data-i18n="lic.title"></h3>
+        <p id="licState"></p>
+        <label><span data-i18n="lic.key"></span> <input name="key" autocomplete="off" spellcheck="false"></label>
+        <div class="row"><button type="submit" data-i18n="lic.activate"></button><button type="button" class="ghost danger" id="licRemove" data-i18n="lic.remove"></button></div>
+      </form>
+    </div>
+    <div class="sub" id="settings-db">
+    <div class="card"><div id="dbCurrent"></div></div>
+    <form id="dbForm" class="card form">
+      <h3 data-i18n="db.move"></h3>
+      <label><span data-i18n="db.type"></span> <select name="type"><option value="sqlite" data-i18n="db.sqlite"></option><option value="postgres">PostgreSQL</option><option value="mysql">MySQL / MariaDB</option></select></label>
+      <div data-for="sqlite"><label><span data-i18n="db.path"></span> <input name="path"></label></div>
+      <div data-for="net" hidden>
+        <div class="row"><label><span data-i18n="db.host"></span> <input name="host" placeholder="127.0.0.1"></label><label class="narrow"><span data-i18n="db.port"></span> <input name="port" placeholder="5432"></label></div>
+        <div class="row"><label><span data-i18n="db.database"></span> <input name="database" placeholder="teleops"></label><label><span data-i18n="db.user"></span> <input name="user"></label></div>
+        <label><span data-i18n="db.password"></span> <input name="password" type="password" autocomplete="new-password"></label>
+        <label class="inline"><input type="checkbox" name="ssl"> <span data-i18n="db.ssl"></span></label>
+      </div>
+      <label><span data-i18n="db.url"></span> <input name="url" placeholder="postgres://user:pass@host:5432/db"></label>
+      <label class="inline"><input type="checkbox" name="copy" checked> <span data-i18n="db.copy"></span></label>
+      <div class="row"><button type="button" id="dbTest" class="ghost" data-i18n="db.test"></button><button type="submit" data-i18n="db.switch"></button></div>
+      <div id="dbResult" class="muted"></div>
+    </form>
+    </div>
+  </section>
+
+</main>
+
+<dialog id="addDlg">
+  <form method="dialog" class="dlg" id="addForm">
+    <h3 data-i18n="add.title"></h3>
+    <p class="muted small" data-i18n-html="add.hint"></p>
+    <label><span data-i18n="add.token"></span> <input name="token" autocomplete="off" spellcheck="false" placeholder="123456789:AAH…"></label>
+    <p class="muted small" data-i18n="add.tokenHint"></p>
+    <div class="row"><button value="cancel" class="ghost" formnovalidate data-i18n="cancel"></button><button value="ok" id="addGo" data-i18n="add.go"></button></div>
+  </form>
+</dialog>
+
+<dialog id="profDlg">
+  <form method="dialog" class="dlg" id="profForm">
+    <h3 data-i18n="prof.title"></h3>
+    <div class="prof-head"><span class="avatar big" id="profAvatar"></span><div><div class="phone" id="profPhone"></div><p class="muted small" data-i18n="prof.hint"></p></div></div>
+    <label><span data-i18n="prof.name"></span> <input name="name" maxlength="64" required></label>
+    <label><span data-i18n="prof.about"></span> <textarea name="about" rows="2" maxlength="120"></textarea></label>
+    <label><span data-i18n="prof.description"></span> <textarea name="description" rows="3" maxlength="512"></textarea></label>
+    <label><span data-i18n="prof.commands"></span> <textarea name="commands" rows="4" spellcheck="false" data-i18n-ph="prof.commandsPh"></textarea></label>
+    <label class="inline"><input type="checkbox" name="readAll"> <span data-i18n="prof.readAll"></span></label>
+    <label><span data-i18n="prof.photo"></span> <input name="photo" type="file" accept="image/jpeg,image/png,image/webp"></label>
+    <div class="row"><button type="button" class="ghost small danger" id="profRemovePhoto" data-i18n="prof.removePhoto"></button></div>
+    <div class="row"><button value="cancel" class="ghost" formnovalidate data-i18n="cancel"></button><button value="ok" data-i18n="save"></button></div>
+  </form>
+</dialog>
+
+<div id="toast"></div>
+<script src="/static/app.js?v=1"></script>
+</body>
+</html>

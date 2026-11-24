@@ -1,0 +1,245 @@
+import dns from 'node:dns'
+import fs from 'node:fs'
+import net from 'node:net'
+import path from 'node:path'
+import Fastify, { LogController, type FastifyInstance } from 'fastify'
+import cookie from '@fastify/cookie'
+import formbody from '@fastify/formbody'
+import swagger from '@fastify/swagger'
+import swaggerUi from '@fastify/swagger-ui'
+import { hasZodFastifySchemaValidationErrors, jsonSchemaTransform, serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod'
+import { BUILD, VERSION, config, currentDbUrl, ensureDataDir } from './config.js'
+import { maskDbUrl, migrate, openDb } from './db/index.js'
+import { EventBus, WebhookDispatcher } from './events.js'
+import { logger } from './log.js'
+import { Settings } from './settings.js'
+import { AccountManager } from './tg/manager.js'
+import { TgService } from './tg/service.js'
+import { AdminAuth, ApiKeys } from './security/auth.js'
+import { OAuthServer } from './security/oauth.js'
+import { registerRoutes } from './api/routes.js'
+import { AppError } from './util.js'
+import { localizeError, reqLang, setServerLanguage, tr } from './i18n.js'
+import { primeTheme } from './theme.js'
+import type { App } from './app.js'
+import { Reports, recordCrashSync } from './reports.js'
+import { Updater } from './update.js'
+import { License } from './license.js'
+import { VoiceService } from './voice.js'
+import { BackupService } from './backup.js'
+import { OwnerLink } from './owner.js'
+
+// Slow or IPv4-only links: Node gives each address 250 ms to connect before giving up on it, so a
+// server that answers in a few seconds over IPv6 trouble is never reached ("fetch failed").
+// IPv4 first, and time to connect.
+dns.setDefaultResultOrder('ipv4first')
+net.setDefaultAutoSelectFamilyAttemptTimeout(10_000)
+
+// a crash is written to disk first (Settings → Feedback offers to send it), then systemd/launchd restarts us
+process.on('uncaughtException', (e, origin) => {
+  recordCrashSync(e, origin)
+  logger.fatal({ err: String((e as Error)?.stack ?? e) }, 'crash: uncaught exception')
+  setTimeout(() => process.exit(1), 200)
+})
+
+function takeLock(): () => void {
+  const lock = path.join(config.dataDir, 'service.lock')
+  for (let i = 0; i < 2; i++) {
+    try {
+      const fd = fs.openSync(lock, 'wx', 0o600)
+      fs.writeSync(fd, String(process.pid))
+      fs.closeSync(fd)
+      return () => {
+        try {
+          if (fs.readFileSync(lock, 'utf8') === String(process.pid)) fs.unlinkSync(lock)
+        } catch {
+          /* ignore */
+        }
+      }
+    } catch {
+      const pid = Number(fs.readFileSync(lock, 'utf8') || 0)
+      let alive = false
+      try {
+        if (pid) {
+          process.kill(pid, 0)
+          alive = true
+        }
+      } catch {
+        alive = false
+      }
+      if (alive && pid !== process.pid) {
+        logger.fatal({ pid }, 'another instance holds the lock (one reader per bot!) — exiting')
+        process.exit(3)
+      }
+      fs.unlinkSync(lock)
+    }
+  }
+  throw new Error('could not take lock')
+}
+
+async function main() {
+  ensureDataDir()
+  const release = takeLock()
+  const dbUrl = currentDbUrl()
+  logger.info({ version: VERSION, build: BUILD, db: maskDbUrl(dbUrl) }, 'starting teleops')
+  const h = await openDb(dbUrl)
+  await migrate(h)
+  const settings = new Settings(h)
+  await settings.load()
+  setServerLanguage(settings.get().language)
+  if (config.publicUrl && !settings.get().publicUrl) await settings.update({ publicUrl: config.publicUrl })
+  await primeTheme().catch(() => {})
+  const bus = new EventBus()
+  const admin = new AdminAuth(h)
+  const ctx: ConstructorParameters<typeof AccountManager>[0] = { h, bus, settings }
+  const accounts = new AccountManager(ctx)
+  const owner = new OwnerLink(h, admin, accounts)
+  // `/start <token>` from the config page links the owner's Telegram (login codes go there)
+  ctx.onStart = (acc, m, param) => owner.onStart(acc, m, param)
+  const svc = new TgService(h, accounts, settings)
+  const apiKeys = new ApiKeys(h)
+  const oauth = new OAuthServer(h, settings, admin)
+  const webhooks = new WebhookDispatcher(h, bus)
+  webhooks.setNames({
+    botName: (id) => accounts.accounts.get(id)?.displayName() ?? null,
+    chatUsername: async (bot, chat) => (await accounts.accounts.get(bot)?.store.usernameOf(chat)) ?? null,
+  })
+  await webhooks.start()
+  const voice = new VoiceService(h, bus, accounts, svc)
+  await voice.start()
+  svc.voice = voice
+  const reports = new Reports(h, settings, () => ({
+    Database: h.dialect,
+    Bots: String(accounts.list().length),
+    Language: settings.get().language,
+    Install: fs.existsSync(path.join(path.dirname(new URL(import.meta.url).pathname), '..', '.git')) ? 'git' : 'other',
+  }))
+  await reports.start()
+  const license = new License(h, () => reports.code)
+  await license.start()
+
+  // media links (/media/:token) carry a signed token longer than the default 100-char path param limit
+  const fastify = Fastify({ loggerInstance: logger, logController: new LogController({ disableRequestLogging: true }), trustProxy: true, bodyLimit: 100 * 1024 * 1024, routerOptions: { maxParamLength: 2048 } }) as unknown as FastifyInstance
+  fastify.setValidatorCompiler(validatorCompiler)
+  fastify.setSerializerCompiler(serializerCompiler)
+  await fastify.register(cookie)
+  await fastify.register(formbody)
+  await fastify.register(swagger, {
+    openapi: {
+      openapi: '3.1.0',
+      info: {
+        title: 'TeleOps — Telegram bots API',
+        version: VERSION,
+        description:
+          'REST API over the same Telegram bots used by the MCP server. Auth: `Authorization: Bearer` + an API key from the config page, or an OAuth access token. Every data route accepts `bot` (id or @username) to pick a bot; the default bot otherwise. MCP endpoint: `POST /mcp` (Streamable HTTP).',
+      },
+      components: { securitySchemes: { bearer: { type: 'http', scheme: 'bearer' } } },
+    },
+    transform: jsonSchemaTransform,
+  })
+  await fastify.register(swaggerUi, { routePrefix: '/docs', uiConfig: { docExpansion: 'list', deepLinking: true } })
+  fastify.get('/openapi.json', { schema: { hide: true } }, async () => fastify.swagger())
+
+  fastify.setErrorHandler((err, req, reply) => {
+    if (err instanceof AppError) return reply.code(err.status).send({ error: { code: err.code, message: localizeError(err, reqLang(req)) } })
+    if (hasZodFastifySchemaValidationErrors(err)) return reply.code(400).send({ error: { code: 'VALIDATION', message: err.message } })
+    const e = err as { statusCode?: number; code?: string; message?: string }
+    if (e.statusCode && e.statusCode < 500) return reply.code(e.statusCode).send({ error: { code: e.code ?? 'BAD_REQUEST', message: e.message } })
+    logger.error({ url: req.url, err: String((err as Error)?.stack ?? err) }, 'request failed')
+    return reply.code(500).send({ error: { code: 'INTERNAL', message: tr(reqLang(req), 'Internal error') } })
+  })
+  fastify.setNotFoundHandler((req, reply) => reply.code(404).send({ error: { code: 'NOT_FOUND', message: tr(reqLang(req), '{0} {1} not found', [req.method, req.url.split('?')[0]]) } }))
+
+  let shuttingDown = false
+  const shutdown = async (code: number, reason: string) => {
+    if (shuttingDown) return
+    shuttingDown = true
+    logger.info({ reason }, 'shutting down')
+    const t = setTimeout(() => process.exit(code), 10_000)
+    t.unref()
+    try {
+      voice.stop()
+      await accounts.stopAll()
+      await fastify.close()
+      await h.close()
+    } catch (e) {
+      logger.warn({ err: String(e) }, 'shutdown error')
+    }
+    release()
+    process.exit(code)
+  }
+
+  const updater = new Updater(h, settings, (reason) => setTimeout(() => void shutdown(0, `restart: ${reason}`), 400).unref())
+  // Settings → Backup: by hand or every hour / day / week; a restore restarts with the restored numbers
+  const backup = new BackupService(h, {
+    stopAccounts: () => accounts.stopAll(),
+    restart: (reason) => setTimeout(() => void shutdown(0, `restart: ${reason}`), 400).unref(),
+    supervised: () => updater.supervised(),
+  })
+  await backup.start()
+  const app: App = {
+    h,
+    settings,
+    bus,
+    accounts,
+    svc,
+    admin,
+    apiKeys,
+    oauth,
+    webhooks,
+    reports,
+    updater,
+    license,
+    voice,
+    backup,
+    owner,
+    // systemd (Restart=always) brings us back with the new configuration
+    restart: (reason) => setTimeout(() => void shutdown(0, `restart: ${reason}`), 400).unref(),
+  }
+
+  // activity log (Settings → Log): every change through the API / MCP tool call, never bodies
+  fastify.addHook('onResponse', async (req, reply) => {
+    if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return
+    const url = req.routeOptions?.url ?? req.url.split('?')[0]
+    const ms = Math.round(reply.elapsedTime)
+    if (url === '/mcp') {
+      const body = req.body as { method?: string; params?: { name?: string } } | { method?: string; params?: { name?: string } }[] | undefined
+      const tools = (Array.isArray(body) ? body : [body]).filter((b) => b?.method === 'tools/call').map((b) => b?.params?.name ?? '?')
+      if (tools.length) logger.info({ mod: 'mcp', tools, status: reply.statusCode, ms }, `tool ${tools.join(', ')}`)
+      return
+    }
+    if (!/^\/(v1|auth|oauth)\//.test(url)) return
+    const level = reply.statusCode >= 500 ? 'error' : reply.statusCode >= 400 ? 'warn' : 'info'
+    logger[level]({ mod: 'api', status: reply.statusCode, ms }, `${req.method} ${url}`)
+  })
+
+  // never let a proxy/CDN (Cloudflare) cache an error page
+  fastify.addHook('onSend', async (_req, reply, payload) => {
+    if (reply.statusCode >= 400) reply.header('cache-control', 'no-store')
+    return payload
+  })
+
+  oauth.register(fastify)
+  registerRoutes(fastify, app)
+
+  await fastify.listen({ host: config.host, port: config.port })
+  logger.info({ host: config.host, port: config.port }, 'listening')
+
+  await accounts.loadAll()
+  updater.start()
+
+  setInterval(() => {
+    void oauth.prune().catch(() => undefined)
+    void webhooks.prune().catch(() => undefined)
+  }, 3600_000).unref()
+
+  process.on('SIGTERM', () => void shutdown(0, 'SIGTERM'))
+  process.on('SIGINT', () => void shutdown(0, 'SIGINT'))
+  process.on('unhandledRejection', (e) => logger.error({ err: String((e as Error)?.stack ?? e) }, 'unhandled rejection'))
+}
+
+main().catch((e) => {
+  recordCrashSync(e, 'startup')
+  logger.fatal({ err: String((e as Error)?.stack ?? e) }, 'startup failed')
+  process.exit(1)
+})

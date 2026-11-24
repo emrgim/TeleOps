@@ -1,0 +1,97 @@
+import crypto from 'node:crypto'
+import { getSetting, setSetting, type DbHandle } from './db/index.js'
+
+export type AppSettings = {
+  /** max messages per minute per bot (token bucket; Telegram allows about 30 per second overall, 20 per minute in one group) */
+  ratePerMin: number
+  /** minimum gap between two messages to the same chat, ms */
+  perChatGapMs: number
+  /** '*' = anyone; otherwise comma-separated chat ids / @usernames that MCP/API may send to */
+  sendAllowlist: string
+  /** login code over Telegram, sent by the default bot to the owner's Telegram account (linked once with /start) */
+  otpEnabled: boolean
+  /** OAuth access-token lifetime (seconds) */
+  oauthAccessTtl: number
+  /** OAuth refresh-token lifetime (days) */
+  oauthRefreshDays: number
+  /** public base URL (overrides X-Forwarded-Host detection), e.g. https://teleops.example.com */
+  publicUrl: string
+  /** max media size for send/download (MB) */
+  maxMediaMb: number
+  /** server language: 'auto' (OS locale) | 'en' | 'it' — MCP tool texts, errors, login code */
+  language: string
+  /** web pages: 'light' | 'dark' | 'system' (desktop theme if the computer has one, else the OS light/dark setting) */
+  appearance: string
+  /** crash & malfunction reports to GitHub: 'ask' (keep them until the user sends) | 'auto' | 'off' (don't collect) */
+  crashReports: string
+  /** install new releases from GitHub by itself (git installations) */
+  autoUpdate: boolean
+}
+
+export const DEFAULT_SETTINGS: AppSettings = {
+  ratePerMin: 120,
+  perChatGapMs: 1000,
+  sendAllowlist: '*',
+  otpEnabled: true,
+  oauthAccessTtl: 24 * 3600,
+  oauthRefreshDays: 90,
+  publicUrl: '',
+  maxMediaMb: 50,
+  language: 'auto',
+  appearance: 'system',
+  crashReports: 'ask',
+  autoUpdate: true,
+}
+
+export class Settings {
+  private cur: AppSettings = { ...DEFAULT_SETTINGS }
+  secret = ''
+
+  constructor(private h: DbHandle) {}
+
+  async load(): Promise<void> {
+    const raw = await getSetting(this.h, 'app')
+    if (raw) {
+      try {
+        const saved = JSON.parse(raw) as Record<string, unknown>
+        // keep only known keys (old versions stored settings that no longer exist)
+        this.cur = { ...DEFAULT_SETTINGS, ...Object.fromEntries(Object.entries(saved).filter(([k]) => k in DEFAULT_SETTINGS)) } as AppSettings
+      } catch {
+        this.cur = { ...DEFAULT_SETTINGS }
+      }
+    }
+    let s = await getSetting(this.h, 'server_secret')
+    if (!s) {
+      s = crypto.randomBytes(32).toString('base64url')
+      await setSetting(this.h, 'server_secret', s)
+    }
+    this.secret = s
+  }
+
+  get(): AppSettings {
+    return this.cur
+  }
+
+  async update(patch: Partial<AppSettings>): Promise<AppSettings> {
+    const next = { ...this.cur }
+    for (const [k, v] of Object.entries(patch) as [keyof AppSettings, unknown][]) {
+      if (!(k in DEFAULT_SETTINGS) || v === undefined) continue
+      const def = DEFAULT_SETTINGS[k]
+      if (typeof def === 'number') {
+        const n = Number(v)
+        if (!Number.isFinite(n) || n < 0) continue
+        ;(next as Record<string, unknown>)[k] = n
+      } else if (typeof def === 'boolean') {
+        ;(next as Record<string, unknown>)[k] = Boolean(v)
+      } else {
+        ;(next as Record<string, unknown>)[k] = String(v).trim()
+      }
+    }
+    if (next.ratePerMin < 1) next.ratePerMin = 1
+    if (!['ask', 'auto', 'off'].includes(next.crashReports)) next.crashReports = 'ask'
+    if (next.publicUrl) next.publicUrl = next.publicUrl.replace(/\/+$/, '')
+    this.cur = next
+    await setSetting(this.h, 'app', JSON.stringify(next))
+    return next
+  }
+}

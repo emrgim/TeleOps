@@ -1,0 +1,49 @@
+{
+  "name": "teleops",
+  "version": "0.0.1",
+  "description": "TeleOps — Telegram bots REST API + MCP server on the Bot API (several bots, OAuth 2.1, config page)",
+  "type": "module",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=24"
+  },
+  "main": "dist/main.js",
+  "bin": {
+    "teleops": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node packaging/stamp-build.mjs",
+    "start": "node dist/main.js",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "skill": "node packaging/build-skill.mjs"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.5",
+    "@fastify/formbody": "^9.0.2",
+    "@fastify/swagger": "^9.9.5",
+    "@fastify/swagger-ui": "^6.1.4",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "better-sqlite3": "^13.2.0",
+    "fastify": "^5.12.8",
+    "fastify-type-provider-zod": "^7.0.0",
+    "kysely": "^0.29.9",
+    "mysql2": "^3.24.6",
+    "pg": "^8.23.1",
+    "pino": "^10.4.0",
+    "sharp": "^0.35.5",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^24.19.2",
+    "@types/pg": "^8.23.1",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.1"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.2.0": true,
+    "sharp@0.35.5": true
+  }
+}
